@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paint Lite</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Barra de herramientas -->
+        <div class="toolbar">
+            <button id="pencil" class="tool active" title="Lápiz">✏️</button>
+            <button id="marker" class="tool" title="Marcador">🖌️</button>
+            <button id="brush" class="tool" title="Pincel">🎨</button>
+            <input type="range" id="size" min="1" max="50" value="5" title="Grosor">
+            <input type="range" id="opacity" min="0.1" max="1" step="0.1" value="1" title="Opacidad">
+            <input type="color" id="color" value="#000000" title="Color">
+            <button id="undo" title="Deshacer">↺</button>
+            <button id="redo" title="Rehacer">↻</button>
+            <button id="new-canvas" title="Nuevo lienzo">➕</button>
+            <button id="toggle-theme" title="Cambiar tema">🌙</button>
+        </div>
+        <!-- Lienzo -->
+        <canvas id="canvas"></canvas>
+        <!-- Selector de lienzos -->
+        <div class="canvas-list" id="canvas-list"></div>
+        <!-- Créditos -->
+        <div class="credits">Hecho por Sebastián para el papu de Andrés, wazaaa</div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

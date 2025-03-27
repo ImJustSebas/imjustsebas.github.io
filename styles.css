@@ -1,0 +1,127 @@
+/* styles.css */
+:root {
+    --bg-color: #f0f0f0;
+    --toolbar-bg: #ffffff;
+    --text-color: #333333;
+    --accent-color: #ff6b6b;
+    --shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] {
+    --bg-color: #1a1a1a;
+    --toolbar-bg: #2d2d2d;
+    --text-color: #ffffff;
+    --accent-color: #ff8787;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    transition: background-color 0.3s ease;
+}
+
+.app-container {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+    position: relative; /* Para posicionar los créditos */
+}
+
+.toolbar {
+    background-color: var(--toolbar-bg);
+    padding: 10px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+    transition: all 0.3s ease;
+}
+
+.tool, button {
+    background: none;
+    border: none;
+    padding: 8px;
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.tool:hover, button:hover {
+    transform: scale(1.1);
+}
+
+.tool.active {
+    color: var(--accent-color);
+}
+
+input[type="range"], input[type="color"] {
+    width: 80px;
+}
+
+#canvas {
+    flex-grow: 1;
+    background-color: #ffffff;
+    border: 1px solid #ddd;
+}
+
+/* Estilo para los créditos */
+.credits {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.9rem;
+    color: var(--text-color);
+    opacity: 0.7;
+    transition: color 0.3s ease;
+    pointer-events: none; /* Para que no interfiera con el dibujo */
+}
+
+/* Responsividad */
+@media (max-width: 768px) {
+    .app-container {
+        flex-direction: column;
+    }
+    .toolbar {
+        flex-direction: row;
+        justify-content: space-around;
+        padding: 5px;
+        position: fixed;
+        bottom: 0;
+        width: 100%;
+        background-color: var(--toolbar-bg);
+        z-index: 10;
+    }
+    #canvas {
+        margin-bottom: 60px;
+    }
+    .credits {
+        bottom: 70px; /* Ajustado para no superponerse con la barra en móviles */
+    }
+}
+
+.canvas-list {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: flex;
+    gap: 5px;
+}
+
+.canvas-list button {
+    background-color: var(--toolbar-bg);
+    border: 1px solid var(--accent-color);
+    border-radius: 4px;
+    padding: 5px 10px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.canvas-list button:hover {
+    background-color: var(--accent-color);
+    color: #ffffff;
+}
