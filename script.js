@@ -37,8 +37,9 @@ tools.forEach(tool => {
     });
 });
 
-// Dibujar
+// Funciones de dibujo
 function startDrawing(e) {
+    e.preventDefault(); // Evita el desplazamiento en móviles
     drawing = true;
     ctx.beginPath();
     draw(e);
@@ -55,9 +56,10 @@ function stopDrawing() {
 function draw(e) {
     if (!drawing) return;
 
+    e.preventDefault(); // Evita el desplazamiento en móviles durante el movimiento
     const rect = canvas.getBoundingClientRect();
-    const x = (e.clientX || e.touches[0].clientX) - rect.left;
-    const y = (e.clientY || e.touches[0].clientY) - rect.top;
+    const x = (e.clientX || (e.touches && e.touches[0].clientX)) - rect.left;
+    const y = (e.clientY || (e.touches && e.touches[0].clientY)) - rect.top;
 
     ctx.lineWidth = sizeInput.value;
     ctx.globalAlpha = opacityInput.value;
@@ -79,7 +81,7 @@ function draw(e) {
     }
 }
 
-// Eventos de dibujo
+// Eventos de dibujo (ratón y táctil)
 canvas.addEventListener('mousedown', startDrawing);
 canvas.addEventListener('mouseup', stopDrawing);
 canvas.addEventListener('mousemove', draw);
