@@ -456,7 +456,7 @@
     <div class="app-container" id="app-container">
         <header>
             <h1>CIPHERLINK</h1>
-            <p class="creator">Sistema de Comunicaciones encriptadas <br> By: Sebastian P</p>
+            <p class="creator">Sistema de Comunicaciones Encriptadas <br> By: SebastianP</p>
         </header>
         
         <div class="status-bar">
@@ -641,27 +641,45 @@
         
         // Obtener la IP del usuario
         function getIP() {
-            fetch('https://api.ipify.org?format=json')
-                .then(response => response.json())
-                .then(data => {
-                    userIP = data.ip;
-                    userIpElement.textContent = userIP;
-                    connectionStatus.textContent = 'CIFRADO';
-                    
-                    // Mostrar panel de administrador si corresponde
-                    if (userIP === adminIP) {
-                        adminPanel.style.display = 'block';
-                        clearChatButton.style.display = 'block';
-                    }
-                })
-                .catch(error => {
-                    showError('Error al obtener IP: ' + error.message);
-                });
+            return new Promise((resolve) => {
+                fetch('https://api.ipify.org?format=json')
+                    .then(response => response.json())
+                    .then(data => {
+                        userIP = data.ip;
+                        userIpElement.textContent = userIP;
+                        connectionStatus.textContent = 'CIFRADO';
+                        
+                        // Mostrar panel de administrador si corresponde
+                        if (userIP === adminIP) {
+                            adminPanel.style.display = 'block';
+                            clearChatButton.style.display = 'block';
+                        }
+                        resolve();
+                    })
+                    .catch(error => {
+                        showError('Error al obtener IP: ' + error.message);
+                        resolve();
+                    });
+            });
+        }
+        
+        // Configurar escucha en tiempo real para mensajes nuevos
+        function setupRealtimeListener() {
+            messagesRef.orderByChild('timestamp').on('child_added', (snapshot) => {
+                const message = snapshot.val();
+                
+                // Solo mostrar mensajes de otros usuarios
+                if (message.ip !== userIP) {
+                    const decryptedMessage = decryptMessage(message.text);
+                    addMessageToChat(decryptedMessage, message.ip, false);
+                }
+            });
         }
         
         // Inicializar la aplicación después de la autenticación
-        function initializeApp() {
-            getIP();
+        async function initializeApp() {
+            await getIP();
+            setupRealtimeListener();
             
             // Enviar mensaje
             sendButton.addEventListener('click', async () => {
@@ -694,17 +712,6 @@
             messageInput.addEventListener('keypress', (e) => {
                 if (e.key === "Enter") {
                     sendButton.click();
-                }
-            });
-            
-            // Escuchar mensajes nuevos
-            messagesRef.orderByChild('timestamp').on('child_added', (snapshot) => {
-                const message = snapshot.val();
-                
-                // Solo mostrar mensajes de otros usuarios
-                if (message.ip !== userIP) {
-                    const decryptedMessage = decryptMessage(message.text);
-                    addMessageToChat(decryptedMessage, message.ip, false);
                 }
             });
             
