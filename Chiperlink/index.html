@@ -456,13 +456,14 @@
     <div class="app-container" id="app-container">
         <header>
             <h1>CIPHERLINK</h1>
-            <p class="creator">Sistema de Comunicaciones Encriptadas <br> By: SebastianP</p>
+            <p class="creator">Sistema de Comunicaciones Seguras</p>
         </header>
         
         <div class="status-bar">
             <div>Estado: <span id="connection-status">CIFRADO</span></div>
             <div>Tu IP: <span id="user-ip">[CIFRADO]</span></div>
             <div>Sesión: <span id="session-status">ACTIVA</span></div>
+            <div>Expira: <span id="session-expires">10:00</span></div>
         </div>
         
         <div class="status-message status-success" id="status-message"></div>
@@ -535,13 +536,80 @@
         const pinError = document.getElementById('pin-error');
         const pinInputs = document.querySelectorAll('.pin-digit');
         const pinSubmit = document.getElementById('pin-submit');
+        const sessionStatus = document.getElementById('session-status');
+        const sessionExpires = document.getElementById('session-expires');
         
         // Variables globales
         let userIP = 'Desconocido';
         let encryptionKey = "CipherKey2006"; // Clave de cifrado basada en el PIN
         const adminIP = "177.93.0.18"; // IP del administrador
         let currentPIN = "2006"; // PIN por defecto
-        
+        let sessionTimer;
+        let sessionEndTime;
+
+        // Verificar si hay una sesión activa
+        function checkSession() {
+            const sessionData = localStorage.getItem('cipherlink_session');
+            if (sessionData) {
+                const session = JSON.parse(sessionData);
+                const currentTime = Date.now();
+                const timeLeft = session.expires - currentTime;
+                
+                if (timeLeft > 0) {
+                    // Sesión válida
+                    currentPIN = session.pin;
+                    encryptionKey = "CipherKey" + currentPIN;
+                    loginScreen.style.display = 'none';
+                    appContainer.style.display = 'flex';
+                    initializeApp();
+                    startSessionTimer(timeLeft);
+                    return true;
+                } else {
+                    // Sesión expirada
+                    localStorage.removeItem('cipherlink_session');
+                }
+            }
+            return false;
+        }
+
+        // Iniciar temporizador de sesión
+        function startSessionTimer(duration) {
+            clearInterval(sessionTimer);
+            
+            sessionEndTime = Date.now() + duration;
+            updateSessionTimer();
+            
+            sessionTimer = setInterval(() => {
+                const timeLeft = sessionEndTime - Date.now();
+                if (timeLeft <= 0) {
+                    clearInterval(sessionTimer);
+                    sessionStatus.textContent = "EXPIRADA";
+                    showError("Sesión expirada. Por favor vuelva a autenticarse.");
+                    setTimeout(() => {
+                        localStorage.removeItem('cipherlink_session');
+                        location.reload();
+                    }, 3000);
+                } else {
+                    updateSessionTimer();
+                }
+            }, 1000);
+        }
+
+        // Actualizar visualización del temporizador
+        function updateSessionTimer() {
+            const timeLeft = Math.max(0, sessionEndTime - Date.now());
+            const minutes = Math.floor(timeLeft / 60000);
+            const seconds = Math.floor((timeLeft % 60000) / 1000);
+            sessionExpires.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        // Verificar sesión al cargar la página
+        window.addEventListener('DOMContentLoaded', () => {
+            if (!checkSession()) {
+                pinInputs[0].focus();
+            }
+        });
+
         // Verificar si hay un PIN almacenado
         const storedPIN = localStorage.getItem('cipherlink_pin');
         if (storedPIN) {
@@ -574,9 +642,17 @@
             const enteredPIN = Array.from(pinInputs).map(input => input.value).join('');
             
             if (enteredPIN === currentPIN) {
+                // Guardar sesión (10 minutos)
+                const sessionData = {
+                    pin: currentPIN,
+                    expires: Date.now() + 600000 // 10 minutos
+                };
+                localStorage.setItem('cipherlink_session', JSON.stringify(sessionData));
+                
                 loginScreen.style.display = 'none';
                 appContainer.style.display = 'flex';
                 initializeApp();
+                startSessionTimer(600000);
             } else {
                 pinError.style.display = 'block';
                 // Limpiar campos de PIN
@@ -758,6 +834,13 @@
                 encryptionKey = "CipherKey" + currentPIN;
                 localStorage.setItem('cipherlink_pin', currentPIN);
                 
+                // Actualizar sesión con nuevo PIN
+                const sessionData = JSON.parse(localStorage.getItem('cipherlink_session'));
+                if (sessionData) {
+                    sessionData.pin = currentPIN;
+                    localStorage.setItem('cipherlink_session', JSON.stringify(sessionData));
+                }
+                
                 pinChangeSuccess.textContent = "PIN actualizado correctamente. Nueva clave de cifrado activa.";
                 pinChangeSuccess.className = "status-message status-success";
                 pinChangeSuccess.style.display = 'block';
@@ -799,11 +882,6 @@
         messageInput.addEventListener('blur', function() {
             this.classList.remove('blink');
         });
-        
-        // Enfocar el primer campo de PIN al cargar
-        window.onload = () => {
-            pinInputs[0].focus();
-        };
     </script>
 </body>
 </html>
