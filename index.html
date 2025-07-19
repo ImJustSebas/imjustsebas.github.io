@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CipherLink - Comunicaciones Seguras</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Courier New', monospace;
+        }
+        
+        body {
+            background-color: #0f0f0f;
+            color: #00ff00;
+            line-height: 1.6;
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        #terminal-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 30, 0, 0.1),
+                rgba(0, 30, 0, 0.1) 1px,
+                transparent 1px,
+                transparent 2px
+            );
+            pointer-events: none;
+            z-index: 100;
+        }
+        
+        .scan-line {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: rgba(0, 255, 0, 0.3);
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+            animation: scan 4s linear infinite;
+            z-index: 101;
+        }
+        
+        @keyframes scan {
+            0% { top: 0%; }
+            50% { top: 100%; }
+            100% { top: 0%; }
+        }
+        
+        .login-screen {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            padding: 20px;
+            text-align: center;
+            background-color: rgba(0, 0, 0, 0.9);
+            z-index: 10;
+            position: relative;
+        }
+        
+        .app-container {
+            display: none;
+            height: 100vh;
+            flex-direction: column;
+            max-width: 100%;
+            padding: 15px;
+            position: relative;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #003300;
+        }
+        
+        h1 {
+            color: #00cc00;
+            margin-bottom: 5px;
+            font-size: 1.8rem;
+            text-shadow: 0 0 5px rgba(0, 255, 0, 0.5);
+            letter-spacing: 2px;
+        }
+        
+        .creator {
+            color: #008800;
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+        
+        .status-bar {
+            background-color: rgba(0, 30, 0, 0.7);
+            padding: 8px 12px;
+            border-radius: 3px;
+            margin-bottom: 10px;
+            font-size: 0.85rem;
+            border: 1px solid #003300;
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+        }
+        
+        .status-bar span {
+            font-weight: bold;
+            color: #00ff00;
+        }
+        
+        #chat-container {
+            background-color: rgba(0, 15, 0, 0.5);
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 15px;
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #002200;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+        
+        .message {
+            max-width: 85%;
+            padding: 10px 15px;
+            margin-bottom: 12px;
+            word-break: break-word;
+            border-radius: 4px;
+            position: relative;
+            opacity: 0;
+            animation: fadeIn 0.3s forwards;
+            border: 1px solid;
+        }
+        
+        @keyframes fadeIn {
+            to { opacity: 1; }
+        }
+        
+        .received {
+            align-self: flex-start;
+            background-color: rgba(0, 20, 0, 0.7);
+            border-color: #004400;
+            border-left: 3px solid #00cc00;
+        }
+        
+        .sent {
+            align-self: flex-end;
+            background-color: rgba(0, 30, 0, 0.7);
+            border-color: #006600;
+            border-right: 3px solid #00ff00;
+        }
+        
+        .system {
+            align-self: center;
+            background-color: rgba(30, 0, 0, 0.7);
+            border-color: #440000;
+            text-align: center;
+            max-width: 100%;
+        }
+        
+        .message-header {
+            font-size: 0.8rem;
+            opacity: 0.8;
+            margin-bottom: 5px;
+            color: #00aa00;
+            font-weight: bold;
+        }
+        
+        .message-content {
+            font-size: 1rem;
+        }
+        
+        .timestamp {
+            font-size: 0.7rem;
+            opacity: 0.6;
+            text-align: right;
+            margin-top: 5px;
+        }
+        
+        #input-container {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        
+        #message-input {
+            flex: 1;
+            padding: 10px 15px;
+            background-color: rgba(0, 15, 0, 0.7);
+            border: 1px solid #003300;
+            border-radius: 3px;
+            font-size: 1rem;
+            color: #00ff00;
+            outline: none;
+        }
+        
+        #message-input:focus {
+            border-color: #00cc00;
+            box-shadow: 0 0 5px rgba(0, 255, 0, 0.3);
+        }
+        
+        button {
+            background-color: rgba(0, 40, 0, 0.8);
+            color: #00ff00;
+            border: 1px solid #004400;
+            border-radius: 3px;
+            padding: 10px 15px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: bold;
+        }
+        
+        button:hover {
+            background-color: rgba(0, 60, 0, 0.9);
+            border-color: #00aa00;
+            box-shadow: 0 0 8px rgba(0, 255, 0, 0.4);
+        }
+        
+        button:active {
+            transform: translateY(1px);
+        }
+        
+        #clear-chat {
+            background-color: rgba(60, 0, 0, 0.8);
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #440000;
+            margin-top: 8px;
+        }
+        
+        #clear-chat:hover {
+            background-color: rgba(80, 0, 0, 0.9);
+            border-color: #aa0000;
+            box-shadow: 0 0 8px rgba(255, 0, 0, 0.4);
+        }
+        
+        .legal-notice {
+            margin-top: 15px;
+            font-size: 0.7rem;
+            color: #008800;
+            text-align: center;
+            padding: 8px;
+            border-top: 1px solid #002200;
+        }
+        
+        .pin-container {
+            background-color: rgba(0, 0, 0, 0.8);
+            padding: 30px;
+            border-radius: 5px;
+            border: 1px solid #003300;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.2);
+            max-width: 400px;
+            width: 100%;
+        }
+        
+        .pin-title {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            color: #00ff00;
+            text-shadow: 0 0 5px rgba(0, 255, 0, 0.5);
+        }
+        
+        .pin-input {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        
+        .pin-input input {
+            width: 50px;
+            height: 60px;
+            margin: 0 5px;
+            text-align: center;
+            font-size: 1.8rem;
+            background-color: rgba(0, 20, 0, 0.7);
+            border: 1px solid #003300;
+            color: #00ff00;
+            border-radius: 3px;
+            outline: none;
+        }
+        
+        .pin-input input:focus {
+            border-color: #00cc00;
+            box-shadow: 0 0 5px rgba(0, 255, 0, 0.3);
+        }
+        
+        .pin-submit {
+            width: 100%;
+            padding: 12px;
+            font-size: 1.1rem;
+        }
+        
+        .status-message {
+            padding: 10px;
+            border-radius: 3px;
+            margin: 10px 0;
+            display: none;
+            text-align: center;
+        }
+        
+        .status-success {
+            background-color: rgba(0, 40, 0, 0.7);
+            color: #00ff00;
+            border: 1px solid #004400;
+        }
+        
+        .status-error {
+            background-color: rgba(40, 0, 0, 0.7);
+            color: #ff5555;
+            border: 1px solid #440000;
+        }
+        
+        .admin-panel {
+            margin-top: 15px;
+            padding: 15px;
+            background-color: rgba(20, 0, 0, 0.7);
+            border: 1px solid #440000;
+            border-radius: 3px;
+            display: none;
+        }
+        
+        .admin-title {
+            color: #ff5555;
+            margin-bottom: 10px;
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        .pin-change-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        
+        #new-pin-input {
+            flex: 1;
+            padding: 8px;
+            background-color: rgba(0, 15, 0, 0.7);
+            border: 1px solid #440000;
+            color: #00ff00;
+        }
+        
+        .blink {
+            animation: blink 1s infinite;
+        }
+        
+        @keyframes blink {
+            50% { opacity: 0.3; }
+        }
+        
+        .typewriter {
+            overflow: hidden;
+            border-right: .15em solid #00ff00;
+            white-space: nowrap;
+            margin: 0 auto;
+            letter-spacing: .15em;
+            animation: 
+                typing 3.5s steps(40, end),
+                blink-caret .75s step-end infinite;
+        }
+        
+        @keyframes typing {
+            from { width: 0 }
+            to { width: 100% }
+        }
+        
+        @keyframes blink-caret {
+            from, to { border-color: transparent }
+            50% { border-color: #00ff00; }
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .status-bar {
+                flex-direction: column;
+                gap: 5px;
+            }
+            
+            .pin-input input {
+                width: 40px;
+                height: 50px;
+                font-size: 1.5rem;
+            }
+            
+            h1 {
+                font-size: 1.5rem;
+            }
+            
+            .message {
+                max-width: 90%;
+            }
+            
+            #input-container {
+                flex-direction: column;
+            }
+            
+            button {
+                width: 100%;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .pin-input input {
+                width: 35px;
+                height: 45px;
+                font-size: 1.3rem;
+            }
+            
+            .pin-container {
+                padding: 20px;
+            }
+            
+            .message-content {
+                font-size: 0.9rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="terminal-overlay"></div>
+    <div class="scan-line"></div>
+    
+    <!-- Pantalla de inicio - Autenticación -->
+    <div class="login-screen" id="login-screen">
+        <div class="pin-container">
+            <div class="pin-title">CIPHERLINK - ACCESO RESTRINGIDO</div>
+            <div class="typewriter">Sistema de Comunicaciones Seguras - Autenticación Requerida</div>
+            
+            <div class="pin-input">
+                <input type="password" maxlength="1" id="pin1" class="pin-digit" data-next="pin2">
+                <input type="password" maxlength="1" id="pin2" class="pin-digit" data-next="pin3">
+                <input type="password" maxlength="1" id="pin3" class="pin-digit" data-next="pin4">
+                <input type="password" maxlength="1" id="pin4" class="pin-digit" data-next="pin-submit">
+            </div>
+            
+            <button id="pin-submit" class="pin-submit">VERIFICAR ACCESO</button>
+            
+            <div class="status-message status-error" id="pin-error">PIN incorrecto. Intente nuevamente.</div>
+        </div>
+    </div>
+    
+    <!-- Aplicación principal (oculta hasta autenticación) -->
+    <div class="app-container" id="app-container">
+        <header>
+            <h1>CIPHERLINK</h1>
+            <p class="creator">Sistema de Comunicaciones encriptadas <br> By: Sebastian P</p>
+        </header>
+        
+        <div class="status-bar">
+            <div>Estado: <span id="connection-status">CIFRADO</span></div>
+            <div>Tu IP: <span id="user-ip">[CIFRADO]</span></div>
+            <div>Sesión: <span id="session-status">ACTIVA</span></div>
+        </div>
+        
+        <div class="status-message status-success" id="status-message"></div>
+        <div class="status-message status-error" id="error-message"></div>
+        
+        <div id="chat-container">
+            <div class="message system">
+                <div class="message-header">SISTEMA CIPHERLINK</div>
+                <div class="message-content">
+                    Conexión segura establecida. Todos los mensajes cifrados de extremo a extremo.
+                </div>
+                <div class="timestamp">Sistema iniciado</div>
+            </div>
+        </div>
+        
+        <div id="input-container">
+            <input type="text" id="message-input" placeholder="Escriba su mensaje seguro..." required autocomplete="off">
+            <button type="button" id="send-button">ENVIAR</button>
+        </div>
+        
+        <button id="clear-chat">
+            BORRAR HISTORIAL DE COMUNICACIONES
+        </button>
+        
+        <div class="admin-panel" id="admin-panel">
+            <div class="admin-title">PANEL DE ADMINISTRADOR</div>
+            <div class="pin-change-container">
+                <input type="password" id="new-pin-input" placeholder="Nuevo PIN de 4 dígitos" maxlength="4">
+                <button id="change-pin-btn">CAMBIAR PIN</button>
+            </div>
+            <div class="status-message status-success" id="pin-change-success"></div>
+        </div>
+        
+        <div class="legal-notice">
+            Sistema de Comunicaciones Militares CipherLink - Todos los mensajes cifrados AES-256<br>
+            © 2025 Sebastian P. - Uso exclusivo autorizado
+        </div>
+    </div>
+
+    <script>
+        // Configuración de Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyDAPcijJ3FgFwfqJIj_rntH4NJn136Kvk0",
+            authDomain: "app-de-mensajes-b4b7c.firebaseapp.com",
+            databaseURL: "https://app-de-mensajes-b4b7c-default-rtdb.firebaseio.com",
+            projectId: "app-de-mensajes-b4b7c",
+            storageBucket: "app-de-mensajes-b4b7c.firebasestorage.app",
+            messagingSenderId: "470376363770",
+            appId: "1:470376363770:web:dd9e3b09a8be305afabb43"
+        };
+
+        // Inicializar Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        const messagesRef = database.ref('messages');
+        
+        // Referencias a elementos del DOM
+        const loginScreen = document.getElementById('login-screen');
+        const appContainer = document.getElementById('app-container');
+        const chatContainer = document.getElementById('chat-container');
+        const messageInput = document.getElementById('message-input');
+        const sendButton = document.getElementById('send-button');
+        const clearChatButton = document.getElementById('clear-chat');
+        const connectionStatus = document.getElementById('connection-status');
+        const userIpElement = document.getElementById('user-ip');
+        const adminPanel = document.getElementById('admin-panel');
+        const pinChangeInput = document.getElementById('new-pin-input');
+        const changePinBtn = document.getElementById('change-pin-btn');
+        const pinChangeSuccess = document.getElementById('pin-change-success');
+        const pinError = document.getElementById('pin-error');
+        const pinInputs = document.querySelectorAll('.pin-digit');
+        const pinSubmit = document.getElementById('pin-submit');
+        
+        // Variables globales
+        let userIP = 'Desconocido';
+        let encryptionKey = "CipherKey2006"; // Clave de cifrado basada en el PIN
+        const adminIP = "177.93.0.18"; // IP del administrador
+        let currentPIN = "2006"; // PIN por defecto
+        
+        // Verificar si hay un PIN almacenado
+        const storedPIN = localStorage.getItem('cipherlink_pin');
+        if (storedPIN) {
+            currentPIN = storedPIN;
+            encryptionKey = "CipherKey" + currentPIN;
+        }
+        
+        // Configurar campos de PIN
+        pinInputs.forEach((input, index) => {
+            input.addEventListener('input', function() {
+                if (this.value.length === 1) {
+                    const nextId = this.getAttribute('data-next');
+                    if (nextId) {
+                        document.getElementById(nextId).focus();
+                    }
+                }
+            });
+            
+            input.addEventListener('keydown', function(e) {
+                if (e.key === "Backspace" && this.value === '') {
+                    if (index > 0) {
+                        pinInputs[index-1].focus();
+                    }
+                }
+            });
+        });
+        
+        // Función para verificar el PIN
+        function verifyPIN() {
+            const enteredPIN = Array.from(pinInputs).map(input => input.value).join('');
+            
+            if (enteredPIN === currentPIN) {
+                loginScreen.style.display = 'none';
+                appContainer.style.display = 'flex';
+                initializeApp();
+            } else {
+                pinError.style.display = 'block';
+                // Limpiar campos de PIN
+                pinInputs.forEach(input => input.value = '');
+                pinInputs[0].focus();
+                
+                // Efecto de vibración para indicar error
+                loginScreen.animate([
+                    { transform: 'translateX(0)' },
+                    { transform: 'translateX(-10px)' },
+                    { transform: 'translateX(10px)' },
+                    { transform: 'translateX(0)' }
+                ], {
+                    duration: 300,
+                    iterations: 2
+                });
+            }
+        }
+        
+        pinSubmit.addEventListener('click', verifyPIN);
+        
+        // Permitir Enter para enviar PIN
+        pinInputs.forEach(input => {
+            input.addEventListener('keypress', (e) => {
+                if (e.key === "Enter") {
+                    verifyPIN();
+                }
+            });
+        });
+        
+        // Función para cifrar mensajes
+        function encryptMessage(message) {
+            return CryptoJS.AES.encrypt(message, encryptionKey).toString();
+        }
+        
+        // Función para descifrar mensajes
+        function decryptMessage(ciphertext) {
+            try {
+                const bytes = CryptoJS.AES.decrypt(ciphertext, encryptionKey);
+                const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+                return decrypted || "*** MENSAJE NO DESCIFRABLE ***";
+            } catch (e) {
+                console.error("Error de descifrado:", e);
+                return "*** MENSAJE NO DESCIFRABLE ***";
+            }
+        }
+        
+        // Funciones para mostrar estado y errores
+        function showStatus(message) {
+            const statusDiv = document.getElementById('status-message');
+            statusDiv.textContent = message;
+            statusDiv.style.display = 'block';
+            setTimeout(() => { statusDiv.style.display = 'none'; }, 3000);
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error-message');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => { errorDiv.style.display = 'none'; }, 5000);
+        }
+        
+        // Obtener la IP del usuario
+        function getIP() {
+            fetch('https://api.ipify.org?format=json')
+                .then(response => response.json())
+                .then(data => {
+                    userIP = data.ip;
+                    userIpElement.textContent = userIP;
+                    connectionStatus.textContent = 'CIFRADO';
+                    
+                    // Mostrar panel de administrador si corresponde
+                    if (userIP === adminIP) {
+                        adminPanel.style.display = 'block';
+                        clearChatButton.style.display = 'block';
+                    }
+                })
+                .catch(error => {
+                    showError('Error al obtener IP: ' + error.message);
+                });
+        }
+        
+        // Inicializar la aplicación después de la autenticación
+        function initializeApp() {
+            getIP();
+            
+            // Enviar mensaje
+            sendButton.addEventListener('click', async () => {
+                const message = messageInput.value.trim();
+                
+                if (message) {
+                    try {
+                        const encryptedMessage = encryptMessage(message);
+                        
+                        await messagesRef.push({
+                            ip: userIP,
+                            text: encryptedMessage,
+                            timestamp: firebase.database.ServerValue.TIMESTAMP
+                        });
+                        
+                        // Crear mensaje local
+                        addMessageToChat(message, userIP, true);
+                        
+                        messageInput.value = '';
+                        messageInput.focus();
+                    } catch (error) {
+                        showError('Error al enviar mensaje: ' + error.message);
+                    }
+                } else {
+                    showError('Escriba un mensaje para enviar');
+                }
+            });
+            
+            // Enviar con Enter
+            messageInput.addEventListener('keypress', (e) => {
+                if (e.key === "Enter") {
+                    sendButton.click();
+                }
+            });
+            
+            // Escuchar mensajes nuevos
+            messagesRef.orderByChild('timestamp').on('child_added', (snapshot) => {
+                const message = snapshot.val();
+                
+                // Solo mostrar mensajes de otros usuarios
+                if (message.ip !== userIP) {
+                    const decryptedMessage = decryptMessage(message.text);
+                    addMessageToChat(decryptedMessage, message.ip, false);
+                }
+            });
+            
+            // Borrar chat (solo para admin)
+            clearChatButton.addEventListener('click', async () => {
+                if (userIP !== adminIP) {
+                    showError('Acceso denegado: Solo el administrador puede borrar el chat');
+                    return;
+                }
+                
+                if (confirm('¿ESTÁ SEGURO DE BORRAR TODAS LAS COMUNICACIONES?\nEsta acción no se puede deshacer.')) {
+                    try {
+                        await messagesRef.remove();
+                        chatContainer.innerHTML = `
+                            <div class="message system">
+                                <div class="message-header">SISTEMA CIPHERLINK</div>
+                                <div class="message-content">
+                                    Historial de comunicaciones borrado por el administrador.
+                                </div>
+                                <div class="timestamp">Acción administrativa</div>
+                            </div>
+                        `;
+                        showStatus('Historial de comunicaciones eliminado');
+                    } catch (error) {
+                        showError('Error al borrar comunicaciones: ' + error.message);
+                    }
+                }
+            });
+            
+            // Cambiar PIN (solo admin)
+            changePinBtn.addEventListener('click', () => {
+                if (userIP !== adminIP) return;
+                
+                const newPIN = pinChangeInput.value.trim();
+                
+                if (!newPIN || newPIN.length !== 4 || isNaN(newPIN)) {
+                    pinChangeSuccess.textContent = "PIN inválido. Debe ser 4 dígitos.";
+                    pinChangeSuccess.className = "status-message status-error";
+                    pinChangeSuccess.style.display = 'block';
+                    return;
+                }
+                
+                currentPIN = newPIN;
+                encryptionKey = "CipherKey" + currentPIN;
+                localStorage.setItem('cipherlink_pin', currentPIN);
+                
+                pinChangeSuccess.textContent = "PIN actualizado correctamente. Nueva clave de cifrado activa.";
+                pinChangeSuccess.className = "status-message status-success";
+                pinChangeSuccess.style.display = 'block';
+                pinChangeInput.value = '';
+                
+                setTimeout(() => {
+                    pinChangeSuccess.style.display = 'none';
+                }, 3000);
+            });
+        }
+        
+        // Función para añadir mensaje al chat
+        function addMessageToChat(message, ip, isSent = false) {
+            const messageElement = document.createElement('div');
+            messageElement.className = `message ${isSent ? 'sent' : 'received'}`;
+            
+            const now = new Date();
+            const timestamp = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+            
+            messageElement.innerHTML = `
+                <div class="message-header">${isSent ? 'TÚ' : `IP: ${ip}`}</div>
+                <div class="message-content">${message}</div>
+                <div class="timestamp">${timestamp}</div>
+            `;
+            
+            chatContainer.appendChild(messageElement);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            
+            if (!isSent) {
+                showStatus('Mensaje cifrado recibido');
+            }
+        }
+        
+        // Efecto de terminal - cursor parpadeante en campo de mensaje
+        messageInput.addEventListener('focus', function() {
+            this.classList.add('blink');
+        });
+        
+        messageInput.addEventListener('blur', function() {
+            this.classList.remove('blink');
+        });
+        
+        // Enfocar el primer campo de PIN al cargar
+        window.onload = () => {
+            pinInputs[0].focus();
+        };
+    </script>
+</body>
+</html>
