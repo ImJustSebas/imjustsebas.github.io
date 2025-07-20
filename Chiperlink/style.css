@@ -461,7 +461,7 @@ button:active {
         padding: 25px;
     }
     
-    /* Ajustes para móviles */
+    /* Ajustes para móviles - CHAT CONTAINER MODIFICADO */
     .app-container {
         padding: 10px;
         height: calc(100vh - 20px);
@@ -469,8 +469,17 @@ button:active {
     
     #chat-container {
         padding: 15px;
-        min-height: 50vh;
-        max-height: 65vh;
+        min-height: 45vh; /* Reducido de 50vh */
+        max-height: 50vh; /* Reducido de 65vh */
+    }
+    
+    /* Nuevo ajuste para el área de entrada */
+    #input-container {
+        margin-bottom: 10px;
+    }
+    
+    #clear-chat {
+        margin-top: 5px;
     }
 }
 
@@ -500,6 +509,7 @@ button:active {
     .status-bar {
         font-size: 0.8rem;
         padding: 8px 10px;
+        margin-bottom: 10px; /* Reducido margen inferior */
     }
     
     #message-input {
@@ -512,19 +522,75 @@ button:active {
         font-size: 0.9rem;
     }
     
-    /* Mejoras de scroll para móviles */
+    /* MEJORAS PARA MÓVILES - ÁREA DEL CHAT */
     #chat-container {
         padding: 12px;
-        min-height: 55vh;
-        max-height: 60vh;
+        min-height: 40vh; /* Reducido significativamente (de 55vh) */
+        max-height: 45vh; /* Reducido significativamente (de 60vh) */
         overflow-y: scroll;
         -webkit-overflow-scrolling: touch;
+        margin-bottom: 10px; /* Menos espacio inferior */
+    }
+    
+    /* Ajustes adicionales para el área de entrada */
+    #input-container {
+        margin-bottom: 5px;
+    }
+    
+    .legal-notice {
+        margin-top: 10px;
+        padding: 8px;
+        font-size: 0.7rem;
+    }
+    
+    /* Reducción de padding en el panel de administrador */
+    .admin-panel {
+        padding: 15px;
+        margin-top: 15px;
     }
 }
 
 @media (max-height: 700px) {
+    /* Ajustes adicionales para pantallas cortas */
     #chat-container {
-        min-height: 50vh;
-        max-height: 60vh;
+        min-height: 35vh; /* Reducido de 50vh */
+        max-height: 40vh; /* Reducido de 60vh */
+    }
+    
+    .status-bar {
+        padding: 8px 10px;
+        margin-bottom: 10px;
+    }
+    
+    .app-container {
+        padding: 10px 10px 5px;
+    }
+    
+    #input-container {
+        margin-bottom: 5px;
+    }
+    
+    #clear-chat {
+        margin-top: 5px;
+    }
+}
+
+/* Nuevo ajuste para pantallas muy pequeñas */
+@media (max-width: 360px) {
+    #chat-container {
+        min-height: 35vh;
+        max-height: 40vh;
+    }
+    
+    .status-bar > div {
+        font-size: 0.75rem;
+    }
+    
+    #message-input {
+        padding: 8px 12px;
+    }
+    
+    button {
+        padding: 8px 12px;
     }
 }
