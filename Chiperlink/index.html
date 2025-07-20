@@ -13,6 +13,7 @@
             padding: 0;
             box-sizing: border-box;
             font-family: 'Courier New', monospace;
+            -webkit-tap-highlight-color: transparent;
         }
         
         body {
@@ -22,6 +23,7 @@
             height: 100vh;
             overflow: hidden;
             position: relative;
+            touch-action: manipulation;
         }
         
         #terminal-overlay {
@@ -133,6 +135,8 @@
             border: 1px solid #002200;
             box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.6);
             min-height: 60vh;
+            -webkit-overflow-scrolling: touch; /* Scroll suave en iOS */
+            overscroll-behavior: contain;
         }
         
         .message {
@@ -274,12 +278,12 @@
         
         .pin-container {
             background-color: rgba(0, 0, 0, 0.8);
-            padding: 40px;
+            padding: 30px;
             border-radius: 8px;
             border: 1px solid #003300;
             box-shadow: 0 0 25px rgba(0, 255, 0, 0.3);
             max-width: 500px;
-            width: 100%;
+            width: 90%;
         }
         
         .pin-title {
@@ -413,6 +417,25 @@
             margin-top: 10px;
         }
         
+        /* Scrollbar personalizada */
+        #chat-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        #chat-container::-webkit-scrollbar-track {
+            background: rgba(0, 20, 0, 0.3);
+            border-radius: 4px;
+        }
+        
+        #chat-container::-webkit-scrollbar-thumb {
+            background: #00aa00;
+            border-radius: 4px;
+        }
+        
+        #chat-container::-webkit-scrollbar-thumb:hover {
+            background: #00cc00;
+        }
+        
         /* Responsive Design */
         @media (max-width: 768px) {
             .status-bar {
@@ -421,9 +444,9 @@
             }
             
             .pin-input input {
-                width: 45px;
-                height: 55px;
-                font-size: 1.7rem;
+                width: 50px;
+                height: 60px;
+                font-size: 1.8rem;
             }
             
             h1 {
@@ -447,13 +470,25 @@
             .pin-container {
                 padding: 25px;
             }
+            
+            /* Ajustes para móviles */
+            .app-container {
+                padding: 10px;
+                height: calc(100vh - 20px);
+            }
+            
+            #chat-container {
+                padding: 15px;
+                min-height: 50vh;
+                max-height: 65vh;
+            }
         }
         
         @media (max-width: 480px) {
             .pin-input input {
-                width: 40px;
-                height: 50px;
-                font-size: 1.5rem;
+                width: 45px;
+                height: 55px;
+                font-size: 1.6rem;
             }
             
             .pin-container {
@@ -466,6 +501,41 @@
             
             .pin-title {
                 font-size: 1.5rem;
+            }
+            
+            h1 {
+                font-size: 1.6rem;
+            }
+            
+            .status-bar {
+                font-size: 0.8rem;
+                padding: 8px 10px;
+            }
+            
+            #message-input {
+                padding: 10px 15px;
+                font-size: 1rem;
+            }
+            
+            button {
+                padding: 10px 15px;
+                font-size: 0.9rem;
+            }
+            
+            /* Mejoras de scroll para móviles */
+            #chat-container {
+                padding: 12px;
+                min-height: 55vh;
+                max-height: 60vh;
+                overflow-y: scroll;
+                -webkit-overflow-scrolling: touch;
+            }
+        }
+        
+        @media (max-height: 700px) {
+            #chat-container {
+                min-height: 50vh;
+                max-height: 60vh;
             }
         }
     </style>
@@ -831,6 +901,11 @@
                         </div>
                     `;
                     showStatus('Historial de comunicaciones eliminado por administrador');
+                    
+                    // Forzar scroll al final
+                    setTimeout(() => {
+                        chatContainer.scrollTop = chatContainer.scrollHeight;
+                    }, 100);
                 }
             });
         }
@@ -906,6 +981,11 @@
                         `;
                         
                         showStatus('Historial de comunicaciones eliminado');
+                        
+                        // Forzar scroll al final
+                        setTimeout(() => {
+                            chatContainer.scrollTop = chatContainer.scrollHeight;
+                        }, 100);
                     } catch (error) {
                         showError('Error al borrar comunicaciones: ' + error.message);
                     }
@@ -945,6 +1025,11 @@
                     pinChangeSuccess.style.display = 'none';
                 }, 3000);
             });
+            
+            // Forzar scroll al fondo del chat al iniciar
+            setTimeout(() => {
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }, 300);
         }
         
         // Función para añadir mensaje al chat
@@ -967,7 +1052,11 @@
             `;
             
             chatContainer.appendChild(messageElement);
-            chatContainer.scrollTop = chatContainer.scrollHeight;
+            
+            // Scroll al fondo del chat
+            setTimeout(() => {
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }, 50);
             
             if (!isSent) {
                 showStatus('Mensaje cifrado recibido');
