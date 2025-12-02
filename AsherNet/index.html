@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AsherNet - Comunicaciones Seguras</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js" defer></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js" defer></script>
+    <script src="script.js" defer></script>
+</head>
+<body>
+    <!-- Pantalla de inicio - Autenticación -->
+    <div class="login-screen" id="login-screen">
+        <div class="login-card">
+            <div class="app-logo">
+                <span class="logo-text">ASHER</span>
+                <span class="logo-net">NET</span>
+            </div>
+            <div class="login-subtitle">Sistema de Comunicaciones Privadas</div>
+            
+            <div class="pin-section">
+                <div class="pin-label">INGRESE CÓDIGO DE ACCESO</div>
+                <div class="pin-input-container">
+                    <input type="password" maxlength="1" id="pin1" class="pin-digit" data-next="pin2" autofocus>
+                    <input type="password" maxlength="1" id="pin2" class="pin-digit" data-next="pin3">
+                    <input type="password" maxlength="1" id="pin3" class="pin-digit" data-next="pin4">
+                    <input type="password" maxlength="1" id="pin4" class="pin-digit" data-next="pin-submit">
+                </div>
+            </div>
+            
+            <button id="pin-submit" class="login-button">
+                <span class="button-text">INICIAR SESIÓN SEGURA</span>
+                <span class="button-icon">→</span>
+            </button>
+            
+            <div class="login-footer">
+                <div class="security-level">
+                    <div class="security-dot active"></div>
+                    <div class="security-dot"></div>
+                    <div class="security-dot"></div>
+                    <span class="security-text">NIVEL DE SEGURIDAD: ALTO</span>
+                </div>
+                <div class="session-info">Sesión cifrada • 256-bit AES • Conexión P2P</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Aplicación principal (oculta hasta autenticación) -->
+    <div class="app-container" id="app-container">
+        <!-- Barra superior -->
+        <div class="top-bar">
+            <div class="app-header">
+                <div class="app-logo-small">
+                    <span class="logo-text">ASHER</span>
+                    <span class="logo-net">NET</span>
+                </div>
+                <div class="connection-status">
+                    <div class="status-indicator active"></div>
+                    <span>CONEXIÓN SEGURA</span>
+                </div>
+            </div>
+            
+            <div class="user-info">
+                <div class="info-item">
+                    <span class="info-label">ID:</span>
+                    <span id="device-id" class="info-value">[CARGANDO]</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">IP:</span>
+                    <span id="user-ip" class="info-value">[CIFRADA]</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">SESIÓN:</span>
+                    <span id="session-expires" class="info-value">10:00</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Área principal de chat -->
+        <div class="main-content">
+            <div class="chat-section">
+                <div class="chat-header">
+                    <h2>CANAL PRINCIPAL</h2>
+                    <div class="chat-stats">
+                        <span class="online-count">● 1</span>
+                        <span class="encryption-badge">AES-256</span>
+                    </div>
+                </div>
+                
+                <div id="chat-container" class="chat-messages">
+                    <div class="system-message">
+                        <div class="system-header">SISTEMA ASHERNET INICIADO</div>
+                        <div class="system-content">
+                            Canal seguro establecido. Todas las comunicaciones cifradas de extremo a extremo.
+                            Solo usuarios autorizados pueden acceder a este canal.
+                        </div>
+                        <div class="system-time">Sistema iniciado</div>
+                    </div>
+                </div>
+                
+                <div class="input-section">
+                    <div class="input-container">
+                        <input type="text" id="message-input" placeholder="Escribe tu mensaje..." autocomplete="off">
+                        <button id="send-button" class="send-button">
+                            <span class="send-text">ENVIAR</span>
+                            <span class="send-icon">↵</span>
+                        </button>
+                    </div>
+                    <div class="input-actions">
+                        <button id="clear-chat" class="action-button">
+                            <span class="action-icon">🗑️</span>
+                            LIMPIAR CANAL
+                        </button>
+                        <div class="typing-indicator" id="typing-indicator"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Panel lateral (solo admin) -->
+            <div class="sidebar" id="sidebar">
+                <div class="sidebar-header">
+                    <h3>CONTROL DEL SISTEMA</h3>
+                    <div class="admin-badge">ADMIN</div>
+                </div>
+                
+                <div class="admin-panel">
+                    <div class="panel-section">
+                        <h4>CONFIGURACIÓN DE SEGURIDAD</h4>
+                        <div class="form-group">
+                            <label for="new-pin-input">NUEVO CÓDIGO DE ACCESO</label>
+                            <input type="password" id="new-pin-input" placeholder="4 dígitos" maxlength="4">
+                        </div>
+                        <button id="change-pin-btn" class="admin-button">
+                            ACTUALIZAR CÓDIGO
+                        </button>
+                    </div>
+                    
+                    <div class="panel-section">
+                        <h4>ACCIONES DEL SISTEMA</h4>
+                        <button id="refresh-session" class="admin-button secondary">
+                            RENOVAR SESIÓN
+                        </button>
+                        <button id="export-chat" class="admin-button secondary">
+                            EXPORTAR REGISTROS
+                        </button>
+                    </div>
+                    
+                    <div class="system-status">
+                        <h4>ESTADO DEL SISTEMA</h4>
+                        <div class="status-item">
+                            <span>Base de datos:</span>
+                            <span class="status-active">● ACTIVA</span>
+                        </div>
+                        <div class="status-item">
+                            <span>Cifrado:</span>
+                            <span class="status-active">● ACTIVO</span>
+                        </div>
+                        <div class="status-item">
+                            <span>Conexión:</span>
+                            <span id="connection-status" class="status-active">● ESTABLE</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Barra inferior -->
+        <div class="bottom-bar">
+            <div class="legal-notice">
+                AsherNet v1.0 • Creado por Sebastian Porras Solano • © 2025
+                <span class="legal-separator">|</span>
+                Todos los mensajes cifrados con AES-256
+                <span class="legal-separator">|</span>
+                <span id="message-count">0 mensajes transmitidos</span>
+            </div>
+            <div class="status-messages">
+                <div class="status-message status-success" id="status-message"></div>
+                <div class="status-message status-error" id="error-message"></div>
+                <div class="status-message status-info" id="pin-change-success"></div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
