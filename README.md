@@ -32,9 +32,3 @@
 - **Autenticación Doble Factor**: PIN + Identificación de dispositivo
 - **Sesiones Temporales**: Expiración automática por seguridad
 - **Anonimización de IP**: Enmascaramiento parcial de identificación
-
-### **Control de Acceso Jerárquico**
-```javascript
-NIVEL ALPHA (1100) → Control administrativo completo
-NIVEL BETA  (2006) → Operaciones de comunicación
-NIVEL GAMMA        → Monitoreo y observación
