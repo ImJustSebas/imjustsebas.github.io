@@ -1,0 +1,18 @@
+User-agent: *
+Allow: /
+Allow: /assets/
+Disallow: /admin/
+Disallow: /private/
+
+Sitemap: https://imjustsebas.github.io/sitemap.xml
+
+# GitHub Pages specific
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Googlebot
+Allow: /
+Crawl-delay: 1
