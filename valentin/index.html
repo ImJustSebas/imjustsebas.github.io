@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Para Ani</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;500&family=Great+Vibes&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #fdfcf0;
+            --tree-color: #6d4c41;
+            --heart-dark: #d81b60;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            font-family: 'Montserrat', sans-serif;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            color: #4e342e;
+        }
+
+        #canvas-container {
+            width: 100%;
+            height: 55vh;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            z-index: 1;
+        }
+
+        canvas { display: block; }
+
+        .text-section {
+            z-index: 10;
+            text-align: center;
+            width: 100%;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .counter {
+            font-size: 1.2rem;
+            font-weight: 500;
+            margin: 10px 0;
+            color: var(--heart-dark);
+        }
+
+        .question {
+            font-family: 'Great Vibes', cursive;
+            font-size: 2.5rem;
+            margin: 10px 0 20px 0;
+            color: #880e4f;
+        }
+
+        button {
+            background-color: var(--heart-dark);
+            color: white;
+            border: none;
+            padding: 12px 40px;
+            font-size: 1.1rem;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(216, 27, 96, 0.3);
+            align-self: center;
+        }
+
+        footer {
+            font-size: 0.75rem;
+            color: #8d6e63;
+            margin-bottom: 15px;
+            opacity: 0.8;
+        }
+
+        /* Overlay */
+        #love-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(255, 255, 255, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.8s;
+            z-index: 100;
+        }
+        #love-overlay.active { opacity: 1; pointer-events: auto; }
+        .love-msg { font-family: 'Great Vibes', cursive; font-size: 4.5rem; color: var(--heart-dark); }
+
+        .falling-heart {
+            position: fixed;
+            top: -10vh;
+            pointer-events: none;
+            animation: fall linear forwards;
+        }
+        @keyframes fall { to { transform: translateY(110vh) rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container">
+        <canvas id="treeCanvas"></canvas>
+    </div>
+
+    <div class="text-section">
+        <h2 style="font-weight: 300; font-size: 0.9rem; margin:0;">MI AMOR POR TI LLEVA EXISTIENDO:</h2>
+        <div class="counter" id="timer">00:00:00</div>
+        <div class="question">¿Quieres ser mi valentín?</div>
+        <button id="yesBtn">Sí</button>
+    </div>
+
+    <footer>Un detalle hecho para mi querida Ani</footer>
+
+    <div id="love-overlay">
+        <div class="love-msg">¡Te Amo!</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('treeCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight * 0.55;
+
+        let branches = [];
+        let hearts = [];
+        let windAngle = 0;
+
+        class Branch {
+            constructor(startX, startY, endX, endY, w, level) {
+                this.startX = startX;
+                this.startY = startY;
+                this.endX = endX;
+                this.endY = endY;
+                this.w = w;
+                this.level = level;
+                this.currentX = startX;
+                this.currentY = startY;
+                this.finished = false;
+                this.hasSpawned = false;
+            }
+
+            draw() {
+                // Calcular offset de viento basado en la altura y nivel de la rama
+                const windIntensity = (1 - this.level / 6) * 0.5; // Más intenso en las puntas
+                const offset = Math.sin(windAngle + this.level * 0.3) * windIntensity * 3;
+                
+                ctx.beginPath();
+                ctx.moveTo(this.startX, this.startY);
+                ctx.lineTo(this.currentX + offset, this.currentY);
+                ctx.lineWidth = this.w;
+                ctx.lineCap = 'round';
+                ctx.strokeStyle = '#6d4c41';
+                ctx.stroke();
+            }
+
+            update() {
+                if (!this.finished) {
+                    // Animación suave de crecimiento
+                    const speed = 0.08;
+                    this.currentX += (this.endX - this.currentX) * speed;
+                    this.currentY += (this.endY - this.currentY) * speed;
+                    
+                    const distance = Math.sqrt(
+                        Math.pow(this.currentX - this.endX, 2) + 
+                        Math.pow(this.currentY - this.endY, 2)
+                    );
+                    
+                    if (distance < 1) {
+                        this.currentX = this.endX;
+                        this.currentY = this.endY;
+                        this.finished = true;
+                    }
+                }
+                
+                // Crear ramas hijas solo cuando esta rama haya terminado
+                if (this.finished && !this.hasSpawned) {
+                    this.hasSpawned = true;
+                    if (this.level > 0) {
+                        createBranches(this.endX, this.endY, 
+                            Math.sqrt(Math.pow(this.endX - this.startX, 2) + Math.pow(this.endY - this.startY, 2)) * 0.7, 
+                            Math.atan2(this.endY - this.startY, this.endX - this.startX), 
+                            this.w * 0.7, this.level - 1);
+                    } else {
+                        // Crear corazón en la punta
+                        hearts.push({
+                            x: this.endX, 
+                            y: this.endY, 
+                            size: 0, 
+                            maxSize: 6 + Math.random() * 4,
+                            targetSize: 6 + Math.random() * 4,
+                            color: ['#ffcdd2', '#f48fb1', '#d81b60'][Math.floor(Math.random() * 3)],
+                            phase: Math.random() * Math.PI * 2
+                        });
+                    }
+                }
+            }
+        }
+
+        function createBranches(x, y, len, angle, branchWidth, level) {
+            // Crear rama izquierda
+            const angle1 = angle - 0.35;
+            const endX1 = x + len * Math.cos(angle1);
+            const endY1 = y + len * Math.sin(angle1);
+            branches.push(new Branch(x, y, endX1, endY1, branchWidth, level));
+            
+            // Crear rama derecha
+            const angle2 = angle + 0.35;
+            const endX2 = x + len * Math.cos(angle2);
+            const endY2 = y + len * Math.sin(angle2);
+            branches.push(new Branch(x, y, endX2, endY2, branchWidth, level));
+        }
+
+        function drawHeart(x, y, size, color, phase) {
+            // Movimiento suave de balanceo
+            const offsetX = Math.sin(windAngle + phase) * 2;
+            const offsetY = Math.cos(windAngle * 0.5 + phase) * 1;
+            
+            ctx.save();
+            ctx.translate(x + offsetX, y + offsetY);
+            ctx.rotate(Math.PI / 4);
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.fillRect(-size/2, -size/2, size, size);
+            ctx.arc(0, -size/2, size/2, 0, Math.PI, true);
+            ctx.arc(-size/2, 0, size/2, Math.PI/2, Math.PI*1.5, false);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            windAngle += 0.015; // Velocidad del viento más suave
+
+            branches.forEach(b => {
+                b.update();
+                b.draw();
+            });
+
+            hearts.forEach(h => {
+                if (h.size < h.targetSize) {
+                    h.size += 0.15;
+                }
+                drawHeart(h.x, h.y, h.size, h.color, h.phase);
+            });
+
+            requestAnimationFrame(animate);
+        }
+
+        // Iniciar con el tronco principal
+        const trunkX = canvas.width / 2;
+        const trunkY = canvas.height;
+        const trunkLen = canvas.height * 0.25;
+        const trunkEndX = trunkX;
+        const trunkEndY = trunkY - trunkLen;
+        branches.push(new Branch(trunkX, trunkY, trunkEndX, trunkEndY, 10, 5));
+        
+        animate();
+
+        // --- CONTADOR ---
+        const startDate = new Date('2025-09-26T17:45:00').getTime();
+        setInterval(() => {
+            const diff = new Date().getTime() - startDate;
+            const d = Math.floor(diff / 86400000);
+            const h = Math.floor((diff % 86400000) / 3600000);
+            const m = Math.floor((diff % 3600000) / 60000);
+            const s = Math.floor((diff % 60000) / 1000);
+            document.getElementById('timer').innerText = `${d}d : ${h}h : ${m}m : ${s}s`;
+        }, 1000);
+
+        // --- BOTÓN SÍ ---
+        document.getElementById('yesBtn').onclick = () => {
+            document.getElementById('love-overlay').classList.add('active');
+            setInterval(() => {
+                const h = document.createElement('div');
+                h.className = 'falling-heart';
+                h.innerHTML = '❤';
+                h.style.left = Math.random() * 100 + 'vw';
+                h.style.fontSize = Math.random() * 20 + 15 + 'px';
+                h.style.color = '#d81b60';
+                h.style.animationDuration = Math.random() * 2 + 3 + 's';
+                document.body.appendChild(h);
+                setTimeout(() => h.remove(), 4000);
+            }, 100);
+        };
+    </script>
+</body>
+</html>
+                  
