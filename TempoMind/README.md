@@ -16,18 +16,9 @@ Instead of just timing sessions, TempoMind prompts you at the exact moment of in
 
 ---
 
-## Tech Stack
+## Description
 
 * **Frontend:** HTML5, CSS3 (CSS Variables, Flexbox/Grid)
 * **Logic:** Vanilla JavaScript (ES6+)
 * **Charting:** [Chart.js](https://www.chartjs.org/) (via CDN)
 * **Storage:** Browser `localStorage` API
-
----
-
-tempomind/
-│
-├── index.html     # Application structure, layouts, and modal windows
-├── styles.css     # Dark mode theme styling, layout variables, and components
-├── app.js         # Timer logic, LocalStorage integration, and Chart.js rendering
-└── README.md      # Documentation
