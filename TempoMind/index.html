@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Study Sessions</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+    <div class="app-container">
+        <nav class="nav-tabs">
+            <button id="tab-timer-btn" class="tab-btn active" onclick="switchTab('timer')">Timer</button>
+            <button id="tab-stats-btn" class="tab-btn" onclick="switchTab('stats')">Statistics</button>
+        </nav>
+
+        <main id="view-timer" class="view active">
+            <div class="card timer-card">
+                <div class="input-group">
+                    <label for="subject-input">Subject or Topic</label>
+                    <input type="text" id="subject-input" placeholder="E.g. Calculus, Physics, Anatomy..." autocomplete="off">
+                </div>
+
+                <div class="timer-display" id="timer-display">00:00:00</div>
+
+                <div class="controls">
+                    <button id="start-btn" class="btn btn-primary" onclick="startTimer()">Start Session</button>
+                    <button id="stop-btn" class="btn btn-danger hidden" onclick="stopTimer()">Stop</button>
+                </div>
+            </div>
+        </main>
+
+        <main id="view-stats" class="view">
+            <div class="card chart-card">
+                <h2>Performance by Session</h2>
+                <div class="chart-container">
+                    <canvas id="sessionsChart"></canvas>
+                </div>
+            </div>
+
+            <div class="card history-card">
+                <div class="card-header">
+                    <h2>Session History</h2>
+                    <button id="reset-btn" class="btn btn-danger-soft btn-sm" onclick="confirmResetData()">Reset Data</button>
+                </div>
+                <div id="sessions-list" class="sessions-list">
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="notes-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h3>Session Finished</h3>
+            <p id="modal-session-summary" class="summary-text"></p>
+            
+            <div class="input-group">
+                <label for="modal-notes">Did you have any distractions or notes about how you felt?</label>
+                <textarea id="modal-notes" rows="4" placeholder="E.g. I was distracted by my phone / I felt very focused on the theoretical examples..."></textarea>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="discardSession()">Discard</button>
+                <button class="btn btn-primary" onclick="saveSession()">Save Session</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="detail-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h3 id="detail-subject">Session Details</h3>
+            <div class="detail-info">
+                <p><strong>Date:</strong> <span id="detail-date"></span></p>
+                <p><strong>Time:</strong> <span id="detail-time"></span></p>
+                <p><strong>Total Duration:</strong> <span id="detail-duration"></span></p>
+            </div>
+            <div class="detail-notes-box">
+                <strong>Notes / Distractions:</strong>
+                <p id="detail-notes" class="notes-text"></p>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeDetailModal()">Close</button>
+                <button class="btn btn-danger-soft" onclick="deleteCurrentDetailSession()">Delete Session</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
