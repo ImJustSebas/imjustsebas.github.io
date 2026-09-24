@@ -2,286 +2,275 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#000000" />
     <meta
       name="description"
       content="Organiza tus materias y acumula tus horas de estudio"
     />
     <title>TempoMind</title>
+    <link rel="icon" type="image/png" href="icono.png" media="(prefers-color-scheme: light)" />
+    <link rel="icon" type="image/png" href="icono-blanco.png" media="(prefers-color-scheme: dark)" />
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600&family=JetBrains+Mono:wght@200;300;400;500&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="styles.css" />
     <script
       src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
       defer
     ></script>
+    <script src="app.js" defer></script>
   </head>
   <body>
     <div class="app-container">
       <header class="top-bar">
-        <nav class="nav-tabs">
-          <button
-            class="tab-btn active"
-            data-view="subjects"
-            onclick="switchTab('subjects')"
-          >
+        <nav class="nav-tabs" aria-label="Navegación principal">
+          <button class="tab-btn active" data-view="subjects" type="button">
             Mis materias
           </button>
-          <button
-            class="tab-btn"
-            data-view="stats"
-            onclick="switchTab('stats')"
-          >
+          <button class="tab-btn" data-view="stats" type="button">
             Estadísticas
           </button>
         </nav>
-        <button
-          class="icon-btn"
-          onclick="toggleTheme()"
-          aria-label="Cambiar tema"
-        >
-          ◐
+        <button id="theme-toggle-btn" class="icon-btn" type="button" aria-label="Cambiar tema">
+          <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+            <circle cx="12" cy="12" r="8.25"></circle>
+            <path d="M12 3.75a8.25 8.25 0 0 1 0 16.5z"></path>
+          </svg>
         </button>
       </header>
 
-      <main id="view-subjects" class="view active">
-        <section class="page-heading">
-          <div>
-            <p class="eyebrow">Tu biblioteca de estudio</p>
-            <h1>Mis materias</h1>
-            <p class="page-subtitle">Elige una materia para empezar.</p>
-          </div>
-          <button class="btn btn-primary" onclick="openSubjectModal()">
-            Crear materia
-          </button>
-        </section>
-        <p id="active-timer-banner" class="active-timer-banner hidden"></p>
-        <section id="subjects-grid" class="subjects-grid"></section>
-        <section id="subjects-empty" class="card empty-state empty-subjects">
-          <span class="empty-mark">✦</span>
-          <p>Aún no tienes materias</p>
-          <span>
-            Crea tu primera materia y empieza a construir tu historial.
-          </span>
-          <button class="btn btn-primary" onclick="openSubjectModal()">
-            Crear primera materia
-          </button>
-        </section>
-      </main>
-
-      <main id="view-detail" class="view">
-        <button class="back-link" onclick="goToSubjects()">
-          ← Volver a Mis materias
-        </button>
-        <section class="subject-detail-heading">
-          <div>
-            <span id="detail-view-dot" class="detail-subject-dot"></span>
-            <p class="eyebrow">Materia activa</p>
-            <h1 id="detail-view-name">Materia</h1>
-          </div>
-          <div class="detail-total">
-            <span>Total estudiado</span>
-            <strong id="detail-view-total">0m</strong>
-          </div>
-        </section>
-        <section class="card timer-card">
-          <div class="timer-ring" id="timer-ring">
-            <div id="timer-display" class="timer-display">00:00:00</div>
-            <div id="timer-pulse" class="timer-pulse hidden"></div>
-          </div>
-          <div class="controls">
-            <button
-              id="start-btn"
-              class="btn btn-primary"
-              onclick="startTimer()"
-            >
-              Iniciar sesión
-            </button>
-            <button
-              id="pause-btn"
-              class="btn btn-secondary hidden"
-              onclick="togglePause()"
-            >
-              Pausar
-            </button>
-            <button
-              id="stop-btn"
-              class="btn btn-danger hidden"
-              onclick="stopTimer()"
-            >
-              Detener
-            </button>
-          </div>
-        </section>
-        <section class="card history-card">
-          <h2>Sesiones de esta materia</h2>
-          <div id="sessions-list" class="sessions-list"></div>
-        </section>
-      </main>
-
-      <main id="view-stats" class="view">
-        <section class="page-heading">
-          <div>
-            <p class="eyebrow">Vista global</p>
-            <h1>Estadísticas</h1>
-          </div>
-        </section>
-        <section class="stats-grid">
-          <div class="stat-card">
-            <span class="stat-label">Hoy</span>
-            <strong id="stat-today" class="stat-value">0m</strong>
-          </div>
-          <div class="stat-card">
-            <span class="stat-label">Esta semana</span>
-            <strong id="stat-week" class="stat-value">0m</strong>
-          </div>
-          <div class="stat-card">
-            <span class="stat-label">Racha</span>
-            <strong id="stat-streak" class="stat-value">0 días</strong>
-          </div>
-          <div class="stat-card">
-            <span class="stat-label">Promedio</span>
-            <strong id="stat-average" class="stat-value">0m</strong>
-          </div>
-        </section>
-        <section class="card goal-card">
-          <div class="goal-header">
-            <h2>Meta diaria</h2>
-            <button class="btn btn-secondary btn-sm" onclick="editDailyGoal()">
-              Editar
-            </button>
-          </div>
-          <p id="goal-text" class="goal-subtitle">0m / 2h</p>
-          <div id="goal-bar-wrap" class="goal-bar">
-            <div id="goal-fill" class="goal-fill"></div>
-          </div>
-        </section>
-        <section class="card chart-card">
-          <div class="card-header">
-            <h2>Rendimiento global</h2>
-            <div class="header-actions">
-              <button class="btn btn-secondary btn-sm" onclick="exportData()">
-                Exportar
-              </button>
-              <button
-                class="btn btn-secondary btn-sm"
-                onclick="triggerImport()"
-              >
-                Importar
-              </button>
-              <button
-                class="btn btn-danger-soft btn-sm"
-                onclick="confirmResetData()"
-              >
-                Reset
-              </button>
+      <main class="app-shell">
+        <section id="view-subjects" class="view active" aria-label="Materias">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">Tu biblioteca de estudio</p>
+              <h1>Mis materias</h1>
+              <p class="page-subtitle">Elige una materia para empezar.</p>
             </div>
           </div>
-          <div class="chart-container">
-            <canvas id="sessionsChart"></canvas>
+          <p id="active-timer-banner" class="active-timer-banner hidden" aria-live="polite"></p>
+          <div id="subjects-grid" class="subjects-grid"></div>
+          <div id="subjects-empty" class="empty-state empty-subjects hidden">
+            <p>Aún no tienes materias.</p>
+            <button class="btn btn-ghost btn-inline" type="button" data-open-subject-modal>
+              + Nueva materia
+            </button>
           </div>
+        </section>
+
+        <section id="view-detail" class="view detail-view" aria-label="Detalle de materia">
+          <button class="btn btn-ghost back-link" type="button" data-go-subjects>
+            ← Materias
+          </button>
+          <div class="subject-detail-heading">
+            <div>
+              <p class="eyebrow">Materia activa</p>
+              <h1 id="detail-view-name">Materia</h1>
+            </div>
+            <div class="detail-total">
+              <span>Total estudiado</span>
+              <strong id="detail-view-total">0m</strong>
+            </div>
+          </div>
+          <section class="timer-card" aria-label="Cronómetro">
+            <div class="timer-ring" id="timer-ring">
+              <div id="timer-display" class="timer-display" role="timer" aria-live="polite" aria-atomic="true">
+                <span class="t-d">00</span>
+                <span class="timer-colon">:</span>
+                <span class="t-d">00</span>
+                <span class="timer-colon">:</span>
+                <span class="t-d">00</span>
+              </div>
+              <div class="timer-progress" aria-hidden="true"><span id="timer-progress-fill"></span></div>
+            </div>
+            <div class="timer-meta-bar" aria-label="Meta diaria">
+              <span>Meta de hoy</span>
+              <strong id="timer-progress-label">0%</strong>
+            </div>
+            <div class="controls">
+              <button id="start-btn" class="btn btn-primary" type="button" data-start-timer>
+                Iniciar sesión
+              </button>
+              <button id="pause-btn" class="btn btn-secondary hidden" type="button" data-toggle-pause>
+                Pausar
+              </button>
+              <button id="stop-btn" class="btn btn-ghost hidden" type="button" data-stop-timer>
+                Detener
+              </button>
+            </div>
+          </section>
+          <section class="history-card" aria-label="Historial de sesiones">
+            <div class="history-header">
+              <h2>Sesiones</h2>
+              <span id="sessions-count" class="sessions-count">0</span>
+            </div>
+            <div id="sessions-list" class="sessions-list"></div>
+          </section>
+        </section>
+
+        <section id="view-stats" class="view" aria-label="Estadísticas">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">Vista global</p>
+              <h1>Estadísticas</h1>
+            </div>
+          </div>
+          <section class="stats-section" aria-label="Métricas globales">
+            <div class="stat-today-block card-module">
+              <span class="stat-label">Hoy</span>
+              <strong id="stat-today" class="stat-value">0m</strong>
+            </div>
+            <div class="stats-row">
+              <div class="stat-card card-module">
+                <span class="stat-label">Esta semana</span>
+                <strong id="stat-week" class="stat-value">0m</strong>
+              </div>
+              <div class="stat-card card-module">
+                <span class="stat-label">Racha</span>
+                <strong id="stat-streak" class="stat-value">0 días</strong>
+              </div>
+              <div class="stat-card card-module">
+                <span class="stat-label">Promedio</span>
+                <strong id="stat-average" class="stat-value">0m</strong>
+              </div>
+            </div>
+          </section>
+          <section class="goal-card card-module" aria-label="Meta diaria">
+            <div class="goal-header">
+              <h2>Meta diaria</h2>
+              <button class="btn btn-ghost btn-small" type="button" data-edit-goal>
+                Editar
+              </button>
+            </div>
+            <p id="goal-text" class="goal-subtitle">0m / 2h</p>
+            <div id="goal-bar-wrap" class="goal-bar" aria-hidden="true">
+              <span id="goal-fill" class="goal-fill"></span>
+            </div>
+          </section>
+          <section class="chart-card card-module" aria-label="Gráfico de últimos siete días">
+            <div class="card-header">
+              <h2>Últimos 7 días</h2>
+            </div>
+            <div class="chart-container">
+              <canvas id="sessionsChart"></canvas>
+            </div>
+          </section>
+          <section class="data-actions card-module" aria-label="Datos">
+            <span class="eyebrow">Datos</span>
+            <button class="btn btn-ghost btn-small" type="button" data-export-data>Exportar</button>
+            <button class="btn btn-ghost btn-small" type="button" data-trigger-import>Importar</button>
+            <button class="btn btn-ghost btn-small" type="button" data-confirm-reset>Reset</button>
+          </section>
         </section>
       </main>
     </div>
 
-    <input
-      id="import-file"
-      type="file"
-      accept="application/json"
-      class="hidden"
-    />
+    <input id="import-file" type="file" accept="application/json" class="hidden" />
 
-    <div id="subject-modal" class="modal-overlay hidden">
-      <div class="modal-content">
-        <h3>Crear materia</h3>
-        <label>Nombre<input id="subject-name" type="text" /></label>
-        <label
-          >Color<input id="subject-color" type="color" value="#6c8cff"
-        /></label>
+    <div id="subject-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="subject-modal-title">
+      <div class="modal-card" tabindex="-1">
+        <h3 id="subject-modal-title">Crear materia</h3>
+        <div class="field">
+          <label class="field-label" for="subject-name">Nombre</label>
+          <input id="subject-name" type="text" placeholder="Ej. Matemáticas" />
+        </div>
+        <input id="subject-color" type="hidden" value="#ffffff" />
         <div class="modal-actions">
-          <button class="btn btn-secondary" onclick="closeSubjectModal()">
-            Cancelar
-          </button>
-          <button class="btn btn-primary" onclick="createSubject()">
-            Crear
-          </button>
+          <button type="button" class="btn btn-secondary" data-close-subject-modal>Cancelar</button>
+          <button type="button" class="btn btn-primary" data-create-subject>Crear</button>
         </div>
       </div>
     </div>
 
-    <div id="notes-modal" class="modal-overlay hidden">
-      <div class="modal-content">
-        <h3>Sesión finalizada</h3>
-        <p id="modal-session-summary"></p>
-        <label>Notas<textarea id="modal-notes"></textarea></label>
-        <label>
-          Ánimo
-          <select id="modal-mood">
-            <option value="">Sin especificar</option>
-            <option value="5">Excelente</option>
-            <option value="4">Bien</option>
-            <option value="3">Normal</option>
-            <option value="2">Distraído</option>
-            <option value="1">Mal</option>
-          </select>
-        </label>
-        <label>Etiquetas<input id="modal-tags" type="text" /></label>
+    <div id="notes-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="notes-modal-title">
+      <div class="modal-card" tabindex="-1">
+        <h3 id="notes-modal-title">Sesión finalizada</h3>
+        <p id="modal-session-summary" class="summary-text"></p>
+        <div class="field">
+          <label class="field-label" for="modal-notes">Notas</label>
+          <textarea id="modal-notes" placeholder="Resumen breve de la sesión..."></textarea>
+        </div>
+        <div class="field">
+          <fieldset class="mood-fieldset">
+            <legend>Ánimo</legend>
+            <div class="mood-picker" role="radiogroup" aria-label="Ánimo">
+              <button type="button" class="mood-dot" data-mood="1" aria-label="Mal" aria-checked="false" role="radio"></button>
+              <button type="button" class="mood-dot" data-mood="2" aria-label="Distraído" aria-checked="false" role="radio"></button>
+              <button type="button" class="mood-dot" data-mood="3" aria-label="Normal" aria-checked="false" role="radio"></button>
+              <button type="button" class="mood-dot" data-mood="4" aria-label="Bien" aria-checked="false" role="radio"></button>
+              <button type="button" class="mood-dot" data-mood="5" aria-label="Excelente" aria-checked="false" role="radio"></button>
+            </div>
+            <div class="mood-labels" aria-hidden="true">
+              <span>Mal</span>
+              <span>Excelente</span>
+            </div>
+            <div id="mood-current-label" class="mood-current-label">Sin ánimo</div>
+          </fieldset>
+        </div>
+        <div class="field">
+          <label class="field-label" for="modal-tags">Etiquetas</label>
+          <input id="modal-tags" type="text" placeholder="Ej. repaso, álgebra" />
+        </div>
+        <select id="modal-mood" class="hidden" aria-label="Ánimo oculto">
+          <option value="">Sin especificar</option>
+          <option value="5">Excelente</option>
+          <option value="4">Bien</option>
+          <option value="3">Normal</option>
+          <option value="2">Distraído</option>
+          <option value="1">Mal</option>
+        </select>
         <div class="modal-actions">
-          <button class="btn btn-secondary" onclick="discardSession()">
-            Descartar
-          </button>
-          <button class="btn btn-primary" onclick="saveSession()">
-            Guardar sesión
-          </button>
+          <button type="button" class="btn btn-secondary" data-discard-session>Descartar</button>
+          <button type="button" class="btn btn-primary" data-save-session>Guardar sesión</button>
         </div>
       </div>
     </div>
 
-    <div id="detail-modal" class="modal-overlay hidden">
-      <div class="modal-content">
-        <h3 id="detail-subject"></h3>
-        <p class="detail-info">
-          <strong>Fecha:</strong> <span id="detail-date"></span>
-        </p>
-        <p class="detail-info">
-          <strong>Duración:</strong> <span id="detail-duration"></span>
-        </p>
-        <p class="detail-info">
-          <strong>Ánimo:</strong> <span id="detail-mood">Sin especificar</span>
-        </p>
-        <p class="detail-info">
-          <strong>Etiquetas:</strong>
-          <span id="detail-tags">Sin etiquetas</span>
-        </p>
+    <div id="detail-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="detail-modal-title">
+      <div class="modal-card" tabindex="-1">
+        <h3 id="detail-modal-title">Detalle</h3>
+        <p class="detail-info"><strong>Materia:</strong> <span id="detail-subject"></span></p>
+        <p class="detail-info"><strong>Fecha:</strong> <span id="detail-date"></span></p>
+        <p class="detail-info"><strong>Duración:</strong> <span id="detail-duration"></span></p>
+        <p class="detail-info"><strong>Ánimo:</strong> <span id="detail-mood">Sin especificar</span></p>
+        <p class="detail-info"><strong>Etiquetas:</strong> <span id="detail-tags">Sin etiquetas</span></p>
         <div class="detail-notes-box">
           <strong>Notas</strong>
-          <div id="detail-notes" class="notes-text"></div>
+          <div id="detail-notes" class="notes-text">Sin notas</div>
         </div>
-        <button class="btn btn-secondary" onclick="closeDetailModal()">
-          Cerrar
-        </button>
+        <button type="button" class="btn btn-secondary" data-close-detail-modal>Cerrar</button>
       </div>
     </div>
 
-    <div id="confirm-modal" class="modal-overlay hidden">
-      <div class="modal-content">
-        <h3>¿Borrar todos los datos?</h3>
-        <p class="summary-text">
-          Se eliminarán todas las materias, sesiones y el progreso actual.
-        </p>
+    <div id="confirm-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title">
+      <div class="modal-card" tabindex="-1">
+        <h3 id="confirm-modal-title">¿Borrar todos los datos?</h3>
+        <p class="summary-text">Se eliminarán todas las materias, sesiones y el progreso actual.</p>
         <div class="modal-actions">
-          <button
-            class="btn btn-secondary"
-            onclick="closeModal('confirm-modal')"
-          >
-            Cancelar
-          </button>
-          <button class="btn btn-danger" onclick="performResetData()">
-            Confirmar
-          </button>
+          <button type="button" class="btn btn-secondary" data-close-confirm-modal>Cancelar</button>
+          <button type="button" class="btn btn-primary" data-confirm-reset-data>Sí, borrar todo</button>
         </div>
       </div>
     </div>
 
-    <div id="toast" class="toast hidden"></div>
+    <div id="goal-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="goal-modal-title">
+      <div class="modal-card" tabindex="-1">
+        <h3 id="goal-modal-title">Meta diaria</h3>
+        <div class="field">
+          <label class="field-label" for="goal-hours">Horas objetivo</label>
+          <input id="goal-hours" type="number" inputmode="decimal" min="0.5" step="0.5" />
+        </div>
+        <p id="goal-error" class="goal-error hidden" aria-live="polite"></p>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" data-close-goal-modal>Cancelar</button>
+          <button type="button" class="btn btn-primary" data-save-goal>Guardar</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
     <script src="app.js" defer></script>
   </body>
 </html>
