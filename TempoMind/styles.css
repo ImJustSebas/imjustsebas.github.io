@@ -77,13 +77,23 @@ img, svg { display: block; }
   border: 1px solid var(--line);
   border-radius: var(--r-pill);
 }
-.tab-btn, .icon-btn, .btn, .btn-ghost, .btn-secondary, .btn-primary, .back-link {
+.mode-tabs {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 6px;
+  padding: 6px;
+  background: linear-gradient(var(--surface), var(--surface)), var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+}
+.tab-btn, .icon-btn, .btn, .btn-ghost, .btn-secondary, .btn-primary, .back-link, .mode-tab {
   appearance: none;
   border: 0;
   background: transparent;
   cursor: pointer;
 }
-.tab-btn {
+.tab-btn, .mode-tab {
   flex: 1;
   min-height: 48px;
   padding: 0 18px;
@@ -93,7 +103,7 @@ img, svg { display: block; }
   font-weight: 500;
   transition: background-color 200ms var(--ease), color 200ms var(--ease), transform 120ms var(--ease);
 }
-.tab-btn.active {
+.tab-btn.active, .mode-tab.active {
   background: var(--fg);
   color: var(--bg);
 }
@@ -140,7 +150,7 @@ img, svg { display: block; }
   flex-direction: column;
   gap: 8px;
 }
-.eyebrow, .stat-label, .field-label, legend {
+.eyebrow, .stat-label, .field-label, legend, .phase-label {
   color: var(--fg-2);
   font-size: 0.8rem;
   letter-spacing: 0;
@@ -371,8 +381,40 @@ button[disabled], button:disabled {
   width: 100%;
   min-height: clamp(180px, 30vw, 260px);
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 12px;
+}
+.round-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.mood-dot, .round-dot {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--surface-2);
+  transition: background-color 200ms var(--ease), border-color 200ms var(--ease), transform 120ms var(--ease);
+}
+.mood-dot.selected, .round-dot.completed, .round-dot.current {
+  background: var(--fg);
+  border-color: var(--fg);
+}
+.mood-dot.selected::after, .round-dot.completed::after, .round-dot.current::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--bg);
+  transform: translate(-50%, -50%);
 }
 .timer-display {
   display: inline-flex;
@@ -414,6 +456,22 @@ button[disabled], button:disabled {
   border-radius: var(--r-pill);
   background: var(--surface-2);
   overflow: hidden;
+}
+.pomodoro-config {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+}
+.pomodoro-config .field {
+  gap: 6px;
+}
+.pomodoro-config .field-label {
+  font-size: 0.7rem;
+}
+.pomodoro-config input[type="number"] {
+  min-height: 40px;
+  padding: 10px 12px;
 }
 #timer-progress-fill, .goal-fill {
   display: block;
@@ -697,34 +755,10 @@ input:focus, textarea:focus, select:focus, .modal-card:focus { border-color: var
   gap: 10px;
   padding: 8px 0 6px;
 }
-.mood-dot {
-  position: relative;
-  width: 28px;
-  height: 28px;
-  border: 1px solid var(--line-strong);
-  border-radius: 50%;
-  background: var(--surface-2);
-  transition: background-color 200ms var(--ease), border-color 200ms var(--ease), transform 120ms var(--ease);
-}
 .mood-dot::before {
   content: "";
   position: absolute;
   inset: -10px;
-}
-.mood-dot.selected {
-  background: var(--fg);
-  border-color: var(--fg);
-}
-.mood-dot.selected::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--bg);
-  transform: translate(-50%, -50%);
 }
 .mood-labels {
   display: flex;
@@ -801,13 +835,13 @@ input:focus, textarea:focus, select:focus, .modal-card:focus { border-color: var
   outline: 2px solid var(--fg);
   outline-offset: 3px;
 }
-body.focus-mode:not(.focus-awake) :is(.top-bar, .back-link, .subject-detail-heading, .history-card) {
+body.focus-mode:not(.focus-awake) :is(.top-bar, .back-link, .subject-detail-heading, .history-card, .mode-tabs, .pomodoro-config) {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
   transition: opacity 600ms var(--ease), visibility 0s linear 600ms;
 }
-body.focus-awake :is(.top-bar, .back-link, .subject-detail-heading, .history-card) {
+body.focus-awake :is(.top-bar, .back-link, .subject-detail-heading, .history-card, .mode-tabs, .pomodoro-config) {
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
@@ -888,6 +922,9 @@ body.focus-mode:not(.focus-awake) .timer-card {
   }
   .data-actions {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .pomodoro-config {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .data-actions .eyebrow {
     grid-column: 1 / -1;

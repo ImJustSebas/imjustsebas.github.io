@@ -19,9 +19,23 @@ const STORAGE = {
   ACTIVE: "tempomind_active_session_v2",
   GOAL: "tempomind_daily_goal_v2",
   THEME: "tempomind_theme_v2",
+  POMODORO: "tempomind_pomodoro_v2",
 };
 
-const COLORS = ["#ffffff"];
+const pomodoroConfig = {
+  studyMin: 25,
+  shortBreakMin: 5,
+  longBreakMin: 15,
+  roundsBeforeLong: 4,
+};
+
+const pomodoroState = {
+  phase: "study",
+  roundIndex: 1,
+  phaseDurationMs: 25 * 60 * 1000,
+};
+
+let timerMode = "stopwatch";
 const MOOD_LABELS = {
   1: "Mal",
   2: "Distraído",
@@ -36,6 +50,7 @@ function init() {
   loadTheme();
   loadData();
   loadGoal();
+  loadPomodoroConfig();
   restoreActiveSession();
   bindEvents();
   initChart();
@@ -59,6 +74,14 @@ function bindEvents() {
 
   document.querySelectorAll(".tab-btn").forEach((button) => {
     button.addEventListener("click", () => switchTab(button.dataset.view));
+  });
+
+  document.querySelectorAll(".mode-tab").forEach((button) => {
+    button.addEventListener("click", () => switchTimerMode(button.dataset.timerMode));
+  });
+
+  document.querySelectorAll(".pomodoro-config input[type='number']").forEach((input) => {
+    input.addEventListener("change", handlePomodoroConfigChange);
   });
 
   document.querySelectorAll("[data-open-subject-modal]").forEach((button) => {
@@ -121,6 +144,378 @@ function bindEvents() {
   });
 
   document.addEventListener("keydown", handleKeyboard);
+}
+
+function loadPomodoroConfig() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE.POMODORO) || "null");
+    if (!saved || typeof saved !== "object") {
+      localStorage.setItem(STORAGE.POMODORO, JSON.stringify({ ...pomodoroConfig }));
+      return;
+    }
+
+    const nextConfig = {
+      studyMin: Number(saved.studyMin) || pomodoroConfig.studyMin,
+      shortBreakMin: Number(saved.shortBreakMin) || pomodoroConfig.shortBreakMin,
+      longBreakMin: Number(saved.longBreakMin) || pomodoroConfig.longBreakMin,
+      roundsBeforeLong: Number(saved.roundsBeforeLong) || pomodoroConfig.roundsBeforeLong,
+    };
+
+    Object.keys(nextConfig).forEach((key) => {
+      const value = Number(nextConfig[key]);
+      if (!Number.isFinite(value) || value < 1) {
+        nextConfig[key] = pomodoroConfig[key];
+      }
+    });
+
+    Object.assign(pomodoroConfig, nextConfig);
+    localStorage.setItem(STORAGE.POMODORO, JSON.stringify({ ...pomodoroConfig }));
+  } catch (error) {
+    Object.assign(pomodoroConfig, {
+      studyMin: 25,
+      shortBreakMin: 5,
+      longBreakMin: 15,
+      roundsBeforeLong: 4,
+    });
+    localStorage.setItem(STORAGE.POMODORO, JSON.stringify({ ...pomodoroConfig }));
+  }
+
+  pomodoroState.phase = "study";
+  pomodoroState.roundIndex = 1;
+  pomodoroState.phaseDurationMs = pomodoroConfig.studyMin * 60 * 1000;
+}
+
+function handlePomodoroConfigChange(event) {
+  const field = event.target.dataset.configField;
+  if (!field) return;
+
+  const parsed = Number(event.target.value);
+  const safeValue = Number.isFinite(parsed) ? Math.max(1, Math.round(parsed)) : 1;
+
+  if (field === "studyMin") pomodoroConfig.studyMin = safeValue;
+  if (field === "shortBreakMin") pomodoroConfig.shortBreakMin = safeValue;
+  if (field === "longBreakMin") pomodoroConfig.longBreakMin = safeValue;
+  if (field === "roundsBeforeLong") pomodoroConfig.roundsBeforeLong = safeValue;
+
+  localStorage.setItem(STORAGE.POMODORO, JSON.stringify({ ...pomodoroConfig }));
+
+  if (!isRunning && !isPaused) {
+    pomodoroState.phase = "study";
+    pomodoroState.roundIndex = 1;
+    pomodoroState.phaseDurationMs = pomodoroConfig.studyMin * 60 * 1000;
+    elapsedTime = 0;
+    startTime = null;
+    renderTimer();
+  }
+}
+
+function switchTimerMode(mode) {
+  if (!mode || !["stopwatch", "pomodoro"].includes(mode)) return;
+  if (isRunning || isPaused) {
+    showToast("Hay una sesión activa", "error");
+    return;
+  }
+
+  timerMode = mode;
+  if (timerMode === "pomodoro") {
+    pomodoroState.phase = "study";
+    pomodoroState.roundIndex = 1;
+    pomodoroState.phaseDurationMs = pomodoroConfig.studyMin * 60 * 1000;
+    elapsedTime = 0;
+    startTime = null;
+  } else {
+    elapsedTime = 0;
+    startTime = null;
+  }
+
+  renderTimer();
+}
+
+function getPomodoroPhaseText() {
+  if (pomodoroState.phase === "study") return `Ronda ${pomodoroState.roundIndex} de ${pomodoroConfig.roundsBeforeLong}`;
+  if (pomodoroState.phase === "shortBreak") return "Descanso corto";
+  return "Descanso largo";
+}
+
+function renderPomodoroState() {
+  const phaseLabel = document.querySelector(".phase-label");
+  const roundDots = document.querySelector(".round-dots");
+  const configPanel = document.querySelector(".pomodoro-config");
+  const modeTabs = document.querySelector(".mode-tabs");
+
+  if (phaseLabel) {
+    phaseLabel.textContent = getPomodoroPhaseText();
+    phaseLabel.classList.toggle("hidden", timerMode !== "pomodoro");
+  }
+
+  if (roundDots) {
+    roundDots.innerHTML = "";
+    for (let roundNumber = 1; roundNumber <= pomodoroConfig.roundsBeforeLong; roundNumber += 1) {
+      const dot = document.createElement("span");
+      dot.className = "round-dot";
+      if (roundNumber < pomodoroState.roundIndex) dot.classList.add("completed");
+      if (roundNumber === pomodoroState.roundIndex) dot.classList.add("current");
+      if (roundNumber > pomodoroState.roundIndex) dot.classList.add("pending");
+      dot.setAttribute("aria-label", `Ronda ${roundNumber}`);
+      roundDots.appendChild(dot);
+    }
+    roundDots.classList.toggle("hidden", timerMode !== "pomodoro");
+  }
+
+  if (configPanel) {
+    configPanel.classList.toggle("hidden", timerMode !== "pomodoro" || isRunning || isPaused);
+  }
+
+  if (modeTabs) {
+    modeTabs.classList.toggle("hidden", isRunning || isPaused);
+  }
+
+  document.querySelectorAll(".mode-tab").forEach((button) => {
+    const isSelected = button.dataset.timerMode === timerMode;
+    button.classList.toggle("active", isSelected);
+    button.setAttribute("aria-selected", String(isSelected));
+  });
+
+  const studyInput = document.getElementById("pomodoro-study");
+  const shortInput = document.getElementById("pomodoro-short-break");
+  const longInput = document.getElementById("pomodoro-long-break");
+  const roundsInput = document.getElementById("pomodoro-rounds");
+  if (studyInput) studyInput.value = String(pomodoroConfig.studyMin);
+  if (shortInput) shortInput.value = String(pomodoroConfig.shortBreakMin);
+  if (longInput) longInput.value = String(pomodoroConfig.longBreakMin);
+  if (roundsInput) roundsInput.value = String(pomodoroConfig.roundsBeforeLong);
+}
+
+function renderTimer() {
+  const startBtn = document.getElementById("start-btn");
+  const pauseBtn = document.getElementById("pause-btn");
+  const stopBtn = document.getElementById("stop-btn");
+  const timerDisplay = document.getElementById("timer-display");
+
+  if (startBtn) startBtn.classList.toggle("hidden", isRunning);
+  if (pauseBtn) pauseBtn.classList.toggle("hidden", !isRunning);
+  if (stopBtn) stopBtn.classList.toggle("hidden", !isRunning);
+  if (pauseBtn) pauseBtn.textContent = isPaused ? "Reanudar" : "Pausar";
+
+  if (!timerDisplay) return;
+
+  const digits = timerDisplay.querySelectorAll(".t-d");
+  const displayMs = timerMode === "pomodoro"
+    ? Math.max(0, (pomodoroState.phaseDurationMs || 60000) - elapsedTime)
+    : elapsedTime;
+  const values = formatMsParts(displayMs);
+  digits.forEach((node, index) => {
+    node.textContent = values[index];
+  });
+
+  timerDisplay.classList.toggle("is-running", isRunning && !isPaused);
+  timerDisplay.classList.toggle("is-paused", isPaused);
+  updateFocusMode();
+  renderPomodoroState();
+  updateGoalBar();
+}
+
+function startTimer() {
+  if (isRunning) return;
+  const targetSubject = currentSubjectId || activeTimerSubjectId;
+  if (!targetSubject) return;
+
+  activeTimerSubjectId = targetSubject;
+  currentSubjectId = targetSubject;
+
+  if (timerMode === "pomodoro") {
+    pomodoroState.phase = "study";
+    pomodoroState.roundIndex = 1;
+    pomodoroState.phaseDurationMs = pomodoroConfig.studyMin * 60000;
+    elapsedTime = 0;
+  }
+
+  startTime = Date.now() - elapsedTime;
+  isRunning = true;
+  isPaused = false;
+
+  clearInterval(timerInterval);
+  timerInterval = setInterval(tick, 250);
+  persistActiveSession();
+  renderTimer();
+  updateGoalBar();
+}
+
+function tick() {
+  if (!isRunning) return;
+
+  elapsedTime = Date.now() - startTime;
+  if (timerMode === "pomodoro") {
+    const remainingMs = pomodoroState.phaseDurationMs - elapsedTime;
+    if (remainingMs <= 0) {
+      advancePomodoroPhase();
+      return;
+    }
+  }
+
+  renderTimer();
+  persistActiveSession();
+  updateGoalBar();
+}
+
+function advancePomodoroPhase() {
+  const previousPhase = pomodoroState.phase;
+  const sessionStartTime = startTime ? new Date(startTime) : new Date();
+
+  if (previousPhase === "study") {
+    const studySession = {
+      id: Date.now().toString(),
+      subjectId: activeTimerSubjectId || currentSubjectId,
+      durationMs: Number(pomodoroState.phaseDurationMs) || 0,
+      startTimeISO: sessionStartTime.toISOString(),
+      endTimeISO: new Date().toISOString(),
+      notes: "",
+      mood: "",
+      tags: [],
+    };
+
+    if (studySession.subjectId) {
+      sessions.push(studySession);
+      saveData();
+    }
+
+    showToast(`Ronda ${pomodoroState.roundIndex} guardada`);
+
+    if (pomodoroState.roundIndex === pomodoroConfig.roundsBeforeLong) {
+      pomodoroState.phase = "longBreak";
+      pomodoroState.phaseDurationMs = pomodoroConfig.longBreakMin * 60000;
+    } else {
+      pomodoroState.phase = "shortBreak";
+      pomodoroState.phaseDurationMs = pomodoroConfig.shortBreakMin * 60000;
+    }
+  } else if (previousPhase === "shortBreak" || previousPhase === "longBreak") {
+    pomodoroState.phase = "study";
+    if (previousPhase === "longBreak") {
+      pomodoroState.roundIndex = 1;
+    } else {
+      pomodoroState.roundIndex = Math.min((pomodoroState.roundIndex || 1) + 1, pomodoroConfig.roundsBeforeLong);
+    }
+    pomodoroState.phaseDurationMs = pomodoroConfig.studyMin * 60000;
+  }
+
+  elapsedTime = 0;
+  startTime = Date.now();
+
+  try {
+    const AudioCtor = window.AudioContext || window.webkitAudioContext;
+    if (AudioCtor) {
+      const audioContext = new AudioCtor();
+      const notes = [220, 330, 440];
+      notes.forEach((frequency, index) => {
+        const oscillator = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        oscillator.type = "sine";
+        oscillator.frequency.value = frequency;
+        gain.gain.value = 0.0001;
+        oscillator.connect(gain);
+        gain.connect(audioContext.destination);
+        oscillator.start(audioContext.currentTime + index * 0.08);
+        gain.gain.exponentialRampToValueAtTime(0.08, audioContext.currentTime + index * 0.08 + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + index * 0.08 + 0.18);
+        oscillator.stop(audioContext.currentTime + index * 0.08 + 0.2);
+      });
+    }
+    if ("vibrate" in navigator) navigator.vibrate(200);
+  } catch (error) {
+    // No-op: no se requiere permisos ni notificaciones del sistema.
+  }
+
+  renderTimer();
+  persistActiveSession();
+  updateGoalBar();
+}
+
+function togglePause() {
+  if (!isRunning) return;
+
+  if (isPaused) {
+    startTime = Date.now() - elapsedTime;
+    clearInterval(timerInterval);
+    timerInterval = setInterval(tick, 250);
+    isPaused = false;
+  } else {
+    clearInterval(timerInterval);
+    elapsedTime = Date.now() - startTime;
+    isPaused = true;
+  }
+
+  persistActiveSession();
+  renderTimer();
+}
+
+function finalizeSession() {
+  isRunning = false;
+  isPaused = false;
+  updateFocusMode();
+  const sessionSubjectId = activeTimerSubjectId || currentSubjectId;
+  const sessionSubject = subjects.find((subjectItem) => subjectItem.id === sessionSubjectId) || subject();
+  resetSessionForm();
+
+  if (!sessionSubject || elapsedTime < 1000) {
+    resetTimer();
+    return;
+  }
+
+  const summary = document.getElementById("modal-session-summary");
+  if (summary) summary.textContent = `${sessionSubject.name} · ${formatMs(elapsedTime)}`;
+
+  localStorage.removeItem(STORAGE.ACTIVE);
+  openModal("notes-modal", document.getElementById("stop-btn"));
+}
+
+function stopTimer() {
+  clearInterval(timerInterval);
+  timerInterval = null;
+
+  if (timerMode === "pomodoro") {
+    if (pomodoroState.phase === "study" && elapsedTime >= 1000) {
+      finalizeSession();
+      return;
+    }
+
+    isRunning = false;
+    isPaused = false;
+    updateFocusMode();
+    resetTimer();
+    return;
+  }
+
+  if (!isPaused && startTime !== null) {
+    elapsedTime = Date.now() - startTime;
+  }
+
+  finalizeSession();
+}
+
+function resetTimer() {
+  clearInterval(timerInterval);
+  timerInterval = null;
+  elapsedTime = 0;
+  startTime = null;
+  isRunning = false;
+  isPaused = false;
+  activeTimerSubjectId = null;
+  localStorage.removeItem(STORAGE.ACTIVE);
+
+  if (timerMode === "pomodoro") {
+    pomodoroState.phase = "study";
+    pomodoroState.roundIndex = 1;
+    pomodoroState.phaseDurationMs = pomodoroConfig.studyMin * 60000;
+  }
+
+  document.querySelectorAll("#timer-display .t-d").forEach((node) => {
+    node.textContent = "00";
+  });
+
+  updateTimerProgress();
+  renderTimer();
+  updateGoalBar();
+  updateFocusMode();
 }
 
 function renderApp() {
@@ -237,7 +632,6 @@ function createSubject() {
   subjects.push({
     id: Date.now().toString(),
     name,
-    color: document.getElementById("subject-color")?.value || COLORS[0],
     createdAt: new Date().toISOString(),
     totalMs: 0,
   });
@@ -258,129 +652,6 @@ function renderDetail() {
 
   renderTimer();
   renderSessions();
-}
-
-function renderTimer() {
-  const startBtn = document.getElementById("start-btn");
-  const pauseBtn = document.getElementById("pause-btn");
-  const stopBtn = document.getElementById("stop-btn");
-  const timerDisplay = document.getElementById("timer-display");
-
-  if (startBtn) startBtn.classList.toggle("hidden", isRunning);
-  if (pauseBtn) pauseBtn.classList.toggle("hidden", !isRunning);
-  if (stopBtn) stopBtn.classList.toggle("hidden", !isRunning);
-  if (pauseBtn) pauseBtn.textContent = isPaused ? "Reanudar" : "Pausar";
-
-  if (!timerDisplay) return;
-
-  const digits = timerDisplay.querySelectorAll(".t-d");
-  const values = formatMsParts(elapsedTime);
-  digits.forEach((node, index) => {
-    node.textContent = values[index];
-  });
-
-  timerDisplay.classList.toggle("is-running", isRunning && !isPaused);
-  timerDisplay.classList.toggle("is-paused", isPaused);
-  updateFocusMode();
-}
-
-function startTimer() {
-  if (isRunning) return;
-  const targetSubject = currentSubjectId || activeTimerSubjectId;
-  if (!targetSubject) return;
-
-  activeTimerSubjectId = targetSubject;
-  currentSubjectId = targetSubject;
-  startTime = Date.now() - elapsedTime;
-  isRunning = true;
-  isPaused = false;
-
-  clearInterval(timerInterval);
-  timerInterval = setInterval(tick, 250);
-  persistActiveSession();
-  renderTimer();
-  updateGoalBar();
-}
-
-function tick() {
-  if (!isRunning) return;
-
-  elapsedTime = Date.now() - startTime;
-  const digits = document.querySelectorAll("#timer-display .t-d");
-  const values = formatMsParts(elapsedTime);
-  digits.forEach((node, index) => {
-    node.textContent = values[index];
-  });
-
-  updateTimerProgress();
-  persistActiveSession();
-  updateGoalBar();
-}
-
-function togglePause() {
-  if (!isRunning) return;
-
-  if (isPaused) {
-    startTime = Date.now() - elapsedTime;
-    clearInterval(timerInterval);
-    timerInterval = setInterval(tick, 250);
-    isPaused = false;
-  } else {
-    clearInterval(timerInterval);
-    elapsedTime = Date.now() - startTime;
-    isPaused = true;
-  }
-
-  persistActiveSession();
-  renderTimer();
-}
-
-function stopTimer() {
-  clearInterval(timerInterval);
-  timerInterval = null;
-
-  if (!isPaused && startTime !== null) {
-    elapsedTime = Date.now() - startTime;
-  }
-
-  isRunning = false;
-  isPaused = false;
-  updateFocusMode();
-
-  const sessionSubjectId = activeTimerSubjectId || currentSubjectId;
-  const sessionSubject = subjects.find((s) => s.id === sessionSubjectId) || subject();
-  resetSessionForm();
-
-  if (!sessionSubject || elapsedTime < 1000) {
-    resetTimer();
-    return;
-  }
-
-  const summary = document.getElementById("modal-session-summary");
-  if (summary) summary.textContent = `${sessionSubject.name} · ${formatMs(elapsedTime)}`;
-
-  localStorage.removeItem(STORAGE.ACTIVE);
-  openModal("notes-modal", document.getElementById("stop-btn"));
-}
-
-function resetTimer() {
-  clearInterval(timerInterval);
-  timerInterval = null;
-  elapsedTime = 0;
-  startTime = null;
-  isRunning = false;
-  isPaused = false;
-  activeTimerSubjectId = null;
-  localStorage.removeItem(STORAGE.ACTIVE);
-
-  document.querySelectorAll("#timer-display .t-d").forEach((node) => {
-    node.textContent = "00";
-  });
-
-  updateTimerProgress();
-  renderTimer();
-  updateGoalBar();
-  updateFocusMode();
 }
 
 function saveSession() {
@@ -640,6 +911,14 @@ function updateGoalBar() {
   if (goalText) goalText.textContent = `${formatShort(current)} / ${formatShort(safeGoal)}`;
 
   const timerProgressFill = document.getElementById("timer-progress-fill");
+  if (timerMode === "pomodoro") {
+    const ratio = Math.min(Math.max(elapsedTime / Math.max(pomodoroState.phaseDurationMs || 60000, 1), 0), 1);
+    if (timerProgressFill) timerProgressFill.style.width = `${ratio * 100}%`;
+    const timerLabel = document.getElementById("timer-progress-label");
+    if (timerLabel) timerLabel.textContent = getPomodoroPhaseText();
+    return;
+  }
+
   if (timerProgressFill) timerProgressFill.style.width = `${activeValue * 100}%`;
 
   const timerLabel = document.getElementById("timer-progress-label");
@@ -868,7 +1147,6 @@ function importData(event) {
         ...subjectItem,
         id: String(subjectItem.id),
         name: String(subjectItem.name || "Materia"),
-        color: subjectItem.color || COLORS[0],
         totalMs: Number(subjectItem.totalMs) || 0,
       }));
 
@@ -1024,6 +1302,12 @@ function persistActiveSession() {
         subjectId: activeTimerSubjectId || currentSubjectId,
         elapsedTime,
         isPaused,
+        mode: timerMode,
+        phase: pomodoroState.phase,
+        roundIndex: pomodoroState.roundIndex,
+        phaseDurationMs: pomodoroState.phaseDurationMs,
+        startTime: startTime || Date.now(),
+        pomodoroConfig: { ...pomodoroConfig },
       }),
     );
     return;
@@ -1043,15 +1327,53 @@ function restoreActiveSession() {
     activeTimerSubjectId = data.subjectId;
     currentSubjectId = data.subjectId;
     currentView = "detail";
+    timerMode = data.mode === "pomodoro" ? "pomodoro" : "stopwatch";
     elapsedTime = Number(data.elapsedTime) || 0;
-    isRunning = true;
     isPaused = Boolean(data.isPaused);
 
+    if (timerMode === "pomodoro") {
+      pomodoroState.phase = data.phase || "study";
+      pomodoroState.roundIndex = Number(data.roundIndex) || 1;
+      pomodoroState.phaseDurationMs = Number(data.phaseDurationMs) || pomodoroConfig.studyMin * 60000;
+      if (data.pomodoroConfig) Object.assign(pomodoroConfig, data.pomodoroConfig);
+    }
+
+    if (timerMode === "stopwatch") {
+      isRunning = true;
+      if (!isPaused) {
+        startTime = Date.now() - elapsedTime;
+        clearInterval(timerInterval);
+        timerInterval = setInterval(tick, 250);
+      }
+      return;
+    }
+
     if (!isPaused) {
+      const savedStartTime = Number(data.startTime) || Date.now();
+      const nextElapsed = Math.max(0, Date.now() - savedStartTime);
+      if (nextElapsed >= pomodoroState.phaseDurationMs) {
+        showToast("Sesión de pomodoro finalizada mientras no estabas");
+        localStorage.removeItem(STORAGE.ACTIVE);
+        timerMode = "pomodoro";
+        elapsedTime = 0;
+        startTime = null;
+        isRunning = false;
+        isPaused = false;
+        pomodoroState.phase = "study";
+        pomodoroState.roundIndex = 1;
+        pomodoroState.phaseDurationMs = pomodoroConfig.studyMin * 60000;
+        return;
+      }
+      elapsedTime = nextElapsed;
       startTime = Date.now() - elapsedTime;
+      isRunning = true;
       clearInterval(timerInterval);
       timerInterval = setInterval(tick, 250);
+      return;
     }
+
+    isRunning = true;
+    startTime = Date.now() - elapsedTime;
   } catch (error) {
     localStorage.removeItem(STORAGE.ACTIVE);
   }

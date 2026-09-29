@@ -75,7 +75,16 @@
             </div>
           </div>
           <section class="timer-card" aria-label="Cronómetro">
+            <div class="mode-tabs" role="tablist" aria-label="Modo de temporizador">
+              <button class="mode-tab active" type="button" data-timer-mode="stopwatch" role="tab" aria-selected="true">
+                Cronómetro
+              </button>
+              <button class="mode-tab" type="button" data-timer-mode="pomodoro" role="tab" aria-selected="false">
+                Pomodoro
+              </button>
+            </div>
             <div class="timer-ring" id="timer-ring">
+              <div class="phase-label hidden" aria-live="polite">Ronda 1 de 4</div>
               <div id="timer-display" class="timer-display" role="timer" aria-live="polite" aria-atomic="true">
                 <span class="t-d">00</span>
                 <span class="timer-colon">:</span>
@@ -83,7 +92,26 @@
                 <span class="timer-colon">:</span>
                 <span class="t-d">00</span>
               </div>
+              <div class="round-dots hidden" aria-label="Rondas de pomodoro"></div>
               <div class="timer-progress" aria-hidden="true"><span id="timer-progress-fill"></span></div>
+            </div>
+            <div class="pomodoro-config hidden" aria-label="Configuración de pomodoro">
+              <div class="field compact">
+                <label class="field-label" for="pomodoro-study">Estudio</label>
+                <input id="pomodoro-study" type="number" min="1" step="1" inputmode="numeric" data-config-field="studyMin" />
+              </div>
+              <div class="field compact">
+                <label class="field-label" for="pomodoro-short-break">Descanso</label>
+                <input id="pomodoro-short-break" type="number" min="1" step="1" inputmode="numeric" data-config-field="shortBreakMin" />
+              </div>
+              <div class="field compact">
+                <label class="field-label" for="pomodoro-long-break">Descanso largo</label>
+                <input id="pomodoro-long-break" type="number" min="1" step="1" inputmode="numeric" data-config-field="longBreakMin" />
+              </div>
+              <div class="field compact">
+                <label class="field-label" for="pomodoro-rounds">Rondas</label>
+                <input id="pomodoro-rounds" type="number" min="1" step="1" inputmode="numeric" data-config-field="roundsBeforeLong" />
+              </div>
             </div>
             <div class="timer-meta-bar" aria-label="Meta diaria">
               <span>Meta de hoy</span>
@@ -176,7 +204,6 @@
           <label class="field-label" for="subject-name">Nombre</label>
           <input id="subject-name" type="text" placeholder="Ej. Matemáticas" />
         </div>
-        <input id="subject-color" type="hidden" value="#ffffff" />
         <div class="modal-actions">
           <button type="button" class="btn btn-secondary" data-close-subject-modal>Cancelar</button>
           <button type="button" class="btn btn-primary" data-create-subject>Crear</button>
@@ -271,6 +298,5 @@
     </div>
 
     <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
-    <script src="app.js" defer></script>
   </body>
 </html>
