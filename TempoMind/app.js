@@ -61,13 +61,6 @@ function bindEvents() {
   document.getElementById("theme-toggle-btn")?.addEventListener("click", toggleTheme);
   document.getElementById("import-file")?.addEventListener("change", importData);
 
-  document.getElementById("subject-name")?.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      createSubject();
-    }
-  });
-
   document.querySelectorAll(".mood-dot").forEach((dot) => {
     dot.addEventListener("click", () => chooseMood(dot.dataset.mood));
   });
@@ -630,7 +623,7 @@ function createSubject() {
   }
 
   subjects.push({
-    id: Date.now().toString(),
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     name,
     createdAt: new Date().toISOString(),
     totalMs: 0,
