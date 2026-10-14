@@ -1,7 +1,7 @@
-# Web Applications Hosting
+# Alojamiento de Aplicaciones Web
 
-This repository serves as my personal deployment center via GitHub Pages for hosting web projects and applications, allowing anyone to access them directly from the web.
+Este repositorio sirve como mi centro de despliegue personal a través de GitHub Pages para el alojamiento de proyectos y aplicaciones web, lo que permite que cualquier persona pueda acceder a ellos directamente desde la web.
 
-The main objective of this space is to centralize interactive developments, functional interfaces, and proofs of concept. Each application has its own structure within the repository, which maintains order and facilitates scalability as I publish new work.
+El objetivo principal de este espacio es centralizar desarrollos interactivos, interfaces funcionales y pruebas de concepto. Cada aplicación cuenta con su propia estructura dentro del repositorio, lo que mantiene el orden y facilita la escalabilidad a medida que publico nuevos trabajos.
 
-The applications hosted here are built primarily with standard client-side web technologies, such as HTML, CSS, and modern JavaScript, ensuring optimal performance and direct compatibility with the static hosting service.
+Las aplicaciones alojadas aquí están desarrolladas principalmente con tecnologías web estándar del lado del cliente, tales como HTML, CSS y JavaScript moderno, lo que garantiza un rendimiento óptimo y una compatibilidad directa con el servicio de alojamiento estático.
