@@ -21,6 +21,11 @@ const MOONNOTES_CONFIG = {
           nombre: "Ejercicios de razones de cambio relacionadas",
           archivo: "Ejercicios de razones de cambio relacionadas.pdf",
           fecha: "2026-10-14"
+        },
+        {
+          nombre: "Ejercicios de recta tangente y derivadas",
+          archivo: "Ejercicios de recta tangente y derivadas.pdf",
+          fecha: "2026-10-14"
         }
       ]
     }
