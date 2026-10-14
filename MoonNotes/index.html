@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MoonNotes</title>
+  <meta name="description" content="Biblioteca de recursos de estudio en PDF organizada por materias. Gratis y siempre disponible.">
+  <meta name="color-scheme" content="dark light">
+
+  <script>
+    (function () {
+      try {
+        var guardado = localStorage.getItem('moonnotes-tema');
+        if (guardado === 'light' || guardado === 'dark') {
+          document.documentElement.setAttribute('data-theme', guardado);
+        }
+      } catch (e) {}
+    })();
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23A78BFA' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z'/></svg>">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header class="header">
+    <div class="header__inner">
+
+      <a class="logo" href="#" aria-label="MoonNotes, volver al inicio">
+        <span class="logo__icono" aria-hidden="true"><i data-lucide="moon"></i></span>
+        <span class="logo__texto">MoonNotes</span>
+      </a>
+
+      <div class="buscador">
+        <i class="buscador__icono" data-lucide="search" aria-hidden="true"></i>
+        <input id="buscador" class="buscador__input" type="search"
+               placeholder="Buscar recursos..." autocomplete="off" spellcheck="false"
+               aria-label="Buscar recursos en todas las materias">
+        <button id="buscador-limpiar" class="buscador__limpiar" type="button"
+                title="Limpiar búsqueda" aria-label="Limpiar búsqueda" hidden>&times;</button>
+      </div>
+
+      <div class="header__acciones">
+        <a class="youtube-link" href="https://www.youtube.com/@5ilverMo0nYT"
+           target="_blank" rel="noopener noreferrer" title="Canal de YouTube"
+           aria-label="Canal de YouTube de 5ilverMoon">
+          <svg class="youtube-icono" viewBox="0 0 28 20" aria-hidden="true">
+            <rect x="1" y="1" width="26" height="18" rx="5" fill="#FF0033"></rect>
+            <path d="M12 6.1 18 10l-6 3.9V6.1Z" fill="#FFFFFF"></path>
+          </svg>
+        </a>
+        <button id="tema-toggle" class="tema-toggle" type="button"
+                title="Cambiar a tema claro" aria-label="Cambiar a tema claro"></button>
+      </div>
+
+    </div>
+  </header>
+
+  <main class="main" id="contenido">
+
+    <section class="vista" id="vista-inicio" aria-label="Inicio">
+      <div class="hero">
+        <h1 class="hero__titulo">Todo el material que necesitás,<br>en un solo lugar.</h1>
+        <div class="hero__separador" aria-hidden="true"></div>
+        <p class="hero__subtitulo">Prácticas y recursos de estudio, gratis y siempre disponibles.</p>
+      </div>
+
+      <h2 class="seccion__titulo">Materias</h2>
+      <div class="seccion__separador" aria-hidden="true"></div>
+      <div class="grid-materias" id="grid-materias"></div>
+    </section>
+
+    <section class="vista" id="vista-materia" aria-label="Recursos de la materia">
+      <button class="btn-volver" id="btn-volver" type="button"><i data-lucide="arrow-left" aria-hidden="true"></i> Volver</button>
+      <div class="materia-header" id="materia-header"></div>
+      <div class="lista-archivos" id="lista-archivos"></div>
+    </section>
+
+    <section class="vista" id="vista-busqueda" aria-label="Resultados de búsqueda">
+      <h2 class="seccion__titulo" id="busqueda-titulo">Resultados</h2>
+      <div class="lista-archivos" id="lista-resultados"></div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <p>MoonNotes · Biblioteca de recursos de estudio</p>
+    <a class="footer__canal" href="https://www.youtube.com/@5ilverMo0nYT"
+       target="_blank" rel="noopener noreferrer" title="Canal de YouTube">
+      <svg class="youtube-icono" viewBox="0 0 28 20" aria-hidden="true">
+        <rect x="1" y="1" width="26" height="18" rx="5" fill="#FF0033"></rect>
+        <path d="M12 6.1 18 10l-6 3.9V6.1Z" fill="#FFFFFF"></path>
+      </svg>
+      <span>5ilverMoon</span>
+    </a>
+  </footer>
+
+  <script src="config.js"></script>
+  <script src="main.js"></script>
+  <script>lucide.createIcons();</script>
+</body>
+</html>
