@@ -1,10 +1,8 @@
 (function () {
   'use strict';
 
-  const COUNTAPI_BASE = 'https://api.countapi.xyz';
-  const COUNTAPI_NAMESPACE = 'moonnotes-downloads';
   const CLAVE_TEMA = 'moonnotes-tema';
-  const TIEMPO_LIMITE_API = 1500;
+  const MOVIMIENTO_REDUCIDO = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const ICONO_LUNA =
     '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" ' +
@@ -73,6 +71,8 @@
     const dia = parseInt(coincidencia[3], 10);
 
     if (mes < 1 || mes > 12 || dia < 1 || dia > 31) return String(iso);
+    const fecha = new Date(Number(anio), mes - 1, dia);
+    if (fecha.getFullYear() !== Number(anio) || fecha.getMonth() !== mes - 1 || fecha.getDate() !== dia) return String(iso);
 
     return dia + ' ' + MESES[mes - 1] + ' ' + anio;
   }
@@ -90,11 +90,12 @@
     return String(ruta || '')
       .split('/')
       .filter(function (parte) { return parte.length > 0; })
-      .map(encodeURIComponent)
+      .map(function (parte) { return encodeURIComponent(parte).replace(/'/g, '%27'); })
       .join('/');
   }
 
   function contarRecursos(n) {
+    if (n === 0) return 'Sin recursos';
     return n + (n === 1 ? ' recurso' : ' recursos');
   }
 
@@ -107,11 +108,6 @@
       }
     }
     return '📚';
-  }
-
-  function prefiereMenosMovimiento() {
-    return typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
 
   /* ----------------------------------------------------------
@@ -142,7 +138,7 @@
             fecha: archivo.fecha || '',
             ruta: ruta,
             url: codificarRuta(ruta),
-            slug: slugify(nombreCrudo) || ('recurso-' + indiceArchivo)
+            slug: (slugify(nombreMateria + '-' + nombreCrudo) || ('recurso-' + indiceMateria + '-' + indiceArchivo)).slice(0, 80)
           };
         });
 
@@ -177,6 +173,7 @@
   const VISTAS = [vistaInicio, vistaMateria, vistaBusqueda];
 
   let consulta = '';
+  let temporizadorBusqueda = null;
 
   /* ----------------------------------------------------------
      Tema claro / oscuro
@@ -203,87 +200,6 @@
   }
 
   /* ----------------------------------------------------------
-     Contadores de descarga (CountAPI)
-     ---------------------------------------------------------- */
-
-  const contadoresCache = {};
-  const contadoresSolicitados = {};
-
-  function peticionCountAPI(ruta) {
-    const tieneAbort = typeof AbortController !== 'undefined';
-    const controlador = tieneAbort ? new AbortController() : null;
-
-    const temporizador = setTimeout(function () {
-      if (controlador) controlador.abort();
-    }, TIEMPO_LIMITE_API);
-
-    const opciones = { cache: 'no-store' };
-    if (controlador) opciones.signal = controlador.signal;
-
-    return fetch(COUNTAPI_BASE + ruta, opciones)
-      .then(function (respuesta) {
-        if (!respuesta.ok) throw new Error('HTTP ' + respuesta.status);
-        return respuesta.json();
-      })
-      .then(function (datos) {
-        clearTimeout(temporizador);
-        return datos;
-      })
-      .catch(function (error) {
-        clearTimeout(temporizador);
-        throw error;
-      });
-  }
-
-  function actualizarContador(slug, valor) {
-    const nodos = document.querySelectorAll('[data-contador="' + slug + '"]');
-    for (let i = 0; i < nodos.length; i++) {
-      nodos[i].textContent = '↓ ' + valor;
-      nodos[i].hidden = false;
-    }
-  }
-
-  function cargarContador(slug) {
-    if (contadoresCache[slug] !== undefined) {
-      actualizarContador(slug, contadoresCache[slug]);
-      return;
-    }
-
-    if (contadoresSolicitados[slug]) return;
-    contadoresSolicitados[slug] = true;
-
-    peticionCountAPI('/get/' + COUNTAPI_NAMESPACE + '/' + encodeURIComponent(slug))
-      .then(function (datos) {
-        if (datos && typeof datos.value === 'number' && datos.value > 0) {
-          contadoresCache[slug] = datos.value;
-          actualizarContador(slug, datos.value);
-        }
-      })
-      .catch(function () {
-        /* CountAPI no disponible: se oculta el contador en silencio */
-      });
-  }
-
-  function cargarContadores(archivos) {
-    archivos.forEach(function (archivo) {
-      cargarContador(archivo.slug);
-    });
-  }
-
-  function incrementarContador(slug) {
-    return peticionCountAPI('/hit/' + COUNTAPI_NAMESPACE + '/' + encodeURIComponent(slug))
-      .then(function (datos) {
-        if (datos && typeof datos.value === 'number') {
-          contadoresCache[slug] = datos.value;
-          actualizarContador(slug, datos.value);
-        }
-      })
-      .catch(function () {
-        /* Falla silenciosa: la descarga continúa igual */
-      });
-  }
-
-  /* ----------------------------------------------------------
      Plantillas
      ---------------------------------------------------------- */
 
@@ -291,18 +207,13 @@
     const meta = [];
 
     if (conMateria) {
-      meta.push('<span class="archivo__materia">' + escapar(materia.nombre) + '</span>');
+      meta.push('<a class="archivo__materia" href="#' + escapar(materia.slug) + '/' + escapar(archivo.slug) + '">' + escapar(materia.nombre) + '</a>');
     }
 
     const fecha = formatearFecha(archivo.fecha);
     if (fecha) {
       meta.push('<span class="archivo__fecha">' + escapar(fecha) + '</span>');
     }
-
-    meta.push(
-      '<span class="archivo__contador" data-contador="' +
-      escapar(archivo.slug) + '" hidden></span>'
-    );
 
     return '' +
       '<div class="archivo__info">' +
@@ -313,9 +224,8 @@
         '<a class="btn btn--outline" href="' + escapar(archivo.url) + '" ' +
           'target="_blank" rel="noopener noreferrer">Ver</a>' +
         '<button class="btn btn--filled" type="button" ' +
-          'data-descargar="' + escapar(archivo.slug) + '" ' +
           'data-url="' + escapar(archivo.url) + '" ' +
-          'data-archivo="' + escapar(archivo.archivo) + '">Descargar</button>' +
+          'data-archivo="' + escapar(String(archivo.archivo).split('/').pop()) + '">Descargar</button>' +
       '</div>';
   }
 
@@ -335,13 +245,9 @@
     VISTAS.forEach(function (otra) {
       if (otra === vista) return;
       otra.hidden = true;
-      otra.classList.remove('vista--activa');
     });
 
     vista.hidden = false;
-    window.requestAnimationFrame(function () {
-      vista.classList.add('vista--activa');
-    });
   }
 
   function renderInicio() {
@@ -352,7 +258,6 @@
       aviso.className = 'vacio';
       aviso.textContent = 'Todavía no hay materias cargadas.';
       gridMaterias.appendChild(aviso);
-      lucide.createIcons();
       return;
     }
 
@@ -371,8 +276,6 @@
         card.classList.add('card-materia--visible');
       }, 40 + indice * 70);
     });
-
-    lucide.createIcons();
   }
 
   function renderMateria(materia) {
@@ -390,16 +293,12 @@
       aviso.className = 'vacio';
       aviso.textContent = 'Esta materia aún no tiene recursos disponibles.';
       listaArchivos.appendChild(aviso);
-      lucide.createIcons();
       return;
     }
 
     materia.archivos.forEach(function (archivo) {
       listaArchivos.appendChild(crearFilaArchivo(materia, archivo, false));
     });
-
-    cargarContadores(materia.archivos);
-    lucide.createIcons();
   }
 
   function renderBusqueda(termino) {
@@ -425,7 +324,6 @@
       aviso.className = 'vacio';
       aviso.textContent = "No se encontraron recursos para '" + termino + "'.";
       listaResultados.appendChild(aviso);
-      lucide.createIcons();
       return;
     }
 
@@ -436,13 +334,7 @@
     resultados.forEach(function (item) {
       const fila = crearFilaArchivo(item.materia, item.archivo, true);
       listaResultados.appendChild(fila);
-
-      if (contadoresCache[item.archivo.slug] !== undefined) {
-        actualizarContador(item.archivo.slug, contadoresCache[item.archivo.slug]);
-      }
     });
-
-    lucide.createIcons();
   }
 
   function resaltarArchivo(materia, slugArchivo) {
@@ -453,8 +345,8 @@
 
     window.requestAnimationFrame(function () {
       objetivo.scrollIntoView({
-        behavior: prefiereMenosMovimiento() ? 'auto' : 'smooth',
-        block: 'center'
+        behavior: MOVIMIENTO_REDUCIDO ? 'auto' : 'smooth',
+        block: 'start'
       });
     });
 
@@ -505,7 +397,7 @@
       if (materia) {
         renderMateria(materia);
         mostrarVista(vistaMateria);
-        window.scrollTo({ top: 0, behavior: 'auto' });
+        if (!ruta.archivoSlug) window.scrollTo({ top: 0, behavior: 'auto' });
 
         if (ruta.archivoSlug) {
           resaltarArchivo(materia, ruta.archivoSlug);
@@ -535,21 +427,18 @@
     document.body.removeChild(enlace);
   }
 
-  function descargar(url, slug, nombreArchivo) {
-    incrementarContador(slug).then(function () {
-      lanzarDescarga(url, nombreArchivo);
-    });
+  function descargar(url, nombreArchivo) {
+    lanzarDescarga(url, nombreArchivo);
   }
 
   document.addEventListener('click', function (evento) {
-    const boton = evento.target.closest('[data-descargar]');
+    const boton = evento.target.closest('[data-url][data-archivo]');
     if (!boton) return;
 
     evento.preventDefault();
 
     descargar(
       boton.getAttribute('data-url'),
-      boton.getAttribute('data-descargar'),
       boton.getAttribute('data-archivo')
     );
   });
@@ -566,15 +455,19 @@
   }
 
   entradaBuscador.addEventListener('input', function () {
-    consulta = entradaBuscador.value.trim();
-    botonLimpiar.hidden = consulta.length === 0;
+    clearTimeout(temporizadorBusqueda);
+    temporizadorBusqueda = setTimeout(function () {
+      consulta = entradaBuscador.value.trim();
+      botonLimpiar.hidden = consulta.length === 0;
+      if (consulta === '' && entradaBuscador.value !== '') entradaBuscador.value = '';
 
-    if (consulta) {
-      renderBusqueda(consulta);
-      mostrarVista(vistaBusqueda);
-    } else {
-      manejarRuta();
-    }
+      if (consulta) {
+        renderBusqueda(consulta);
+        mostrarVista(vistaBusqueda);
+      } else {
+        manejarRuta();
+      }
+    }, 150);
   });
 
   entradaBuscador.addEventListener('keydown', function (evento) {
@@ -617,6 +510,7 @@
 
   function iniciar() {
     actualizarBotonTema(temaActual());
+    if (window.lucide) lucide.createIcons();
     manejarRuta();
   }
 

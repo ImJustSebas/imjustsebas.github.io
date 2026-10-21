@@ -19,11 +19,10 @@
   </script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
 
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23A78BFA' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z'/></svg>">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.383.0/umd/lucide.min.js"></script>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23666666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z'/></svg>">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -32,12 +31,19 @@
     <div class="header__inner">
 
       <a class="logo" href="#" aria-label="MoonNotes, volver al inicio">
-        <span class="logo__icono" aria-hidden="true"><i data-lucide="moon"></i></span>
+        <span class="logo__icono" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+        </span>
         <span class="logo__texto">MoonNotes</span>
       </a>
 
       <div class="buscador">
-        <i class="buscador__icono" data-lucide="search" aria-hidden="true"></i>
+        <svg class="buscador__icono" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="8"></circle>
+          <path d="m21 21-4.35-4.35"></path>
+        </svg>
         <input id="buscador" class="buscador__input" type="search"
                placeholder="Buscar recursos..." autocomplete="off" spellcheck="false"
                aria-label="Buscar recursos en todas las materias">
@@ -50,21 +56,23 @@
            target="_blank" rel="noopener noreferrer" title="Canal de YouTube"
            aria-label="Canal de YouTube de 5ilverMoon">
           <svg class="youtube-icono" viewBox="0 0 28 20" aria-hidden="true">
-            <rect x="1" y="1" width="26" height="18" rx="5" fill="#FF0033"></rect>
+            <rect x="1" y="1" width="26" height="18" rx="5" fill="#666666"></rect>
             <path d="M12 6.1 18 10l-6 3.9V6.1Z" fill="#FFFFFF"></path>
           </svg>
         </a>
         <button id="tema-toggle" class="tema-toggle" type="button"
-                title="Cambiar a tema claro" aria-label="Cambiar a tema claro"></button>
+                title="Cambiar a tema claro" aria-label="Cambiar a tema claro"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg></button>
       </div>
 
     </div>
   </header>
 
   <main class="main" id="contenido">
+    <noscript><p class="vacio">MoonNotes necesita JavaScript para mostrar la biblioteca.</p></noscript>
 
     <section class="vista" id="vista-inicio" aria-label="Inicio">
       <div class="hero">
+        <p class="hero__eyebrow">BIBLIOTECA DE ESTUDIO</p>
         <h1 class="hero__titulo">Todo el material que necesitás,<br>en un solo lugar.</h1>
         <div class="hero__separador" aria-hidden="true"></div>
         <p class="hero__subtitulo">Prácticas y recursos de estudio, gratis y siempre disponibles.</p>
@@ -75,13 +83,13 @@
       <div class="grid-materias" id="grid-materias"></div>
     </section>
 
-    <section class="vista" id="vista-materia" aria-label="Recursos de la materia">
+    <section class="vista" id="vista-materia" aria-label="Recursos de la materia" hidden>
       <button class="btn-volver" id="btn-volver" type="button"><i data-lucide="arrow-left" aria-hidden="true"></i> Volver</button>
       <div class="materia-header" id="materia-header"></div>
       <div class="lista-archivos" id="lista-archivos"></div>
     </section>
 
-    <section class="vista" id="vista-busqueda" aria-label="Resultados de búsqueda">
+    <section class="vista" id="vista-busqueda" aria-label="Resultados de búsqueda" hidden>
       <h2 class="seccion__titulo" id="busqueda-titulo">Resultados</h2>
       <div class="lista-archivos" id="lista-resultados"></div>
     </section>
@@ -93,7 +101,7 @@
     <a class="footer__canal" href="https://www.youtube.com/@5ilverMo0nYT"
        target="_blank" rel="noopener noreferrer" title="Canal de YouTube">
       <svg class="youtube-icono" viewBox="0 0 28 20" aria-hidden="true">
-        <rect x="1" y="1" width="26" height="18" rx="5" fill="#FF0033"></rect>
+        <rect x="1" y="1" width="26" height="18" rx="5" fill="#666666"></rect>
         <path d="M12 6.1 18 10l-6 3.9V6.1Z" fill="#FFFFFF"></path>
       </svg>
       <span>5ilverMoon</span>
@@ -102,6 +110,5 @@
 
   <script src="config.js"></script>
   <script src="main.js"></script>
-  <script>lucide.createIcons();</script>
 </body>
 </html>
