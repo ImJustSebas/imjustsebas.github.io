@@ -12,6 +12,19 @@ let chartInstance = null;
 let dailyGoalMs = 2 * 60 * 60 * 1000;
 let toastTimeout = null;
 let focusTimeout = null;
+let pendingImport = null;
+let currentSessionId = null;
+let lastResetSnapshot = null;
+let lastResetTimeout = null;
+let audioContext = null;
+let wakeLock = null;
+let lastPersistAt = 0;
+let longSessionWarned = false;
+let veryLongSessionWarned = false;
+let lastPomodoroRender = "";
+let toastAction = null;
+let toastActionTimeout = null;
+const SNAPSHOT_KEY = "tempomind_snapshot_v1";
 
 const STORAGE = {
   SUBJECTS: "tempomind_subjects_v2",
@@ -125,11 +138,40 @@ function bindEvents() {
   document.querySelectorAll("[data-confirm-reset-data]").forEach((button) => {
     button.addEventListener("click", performResetData);
   });
+  document.querySelectorAll("[data-close-import-confirm]").forEach((button) => {
+    button.addEventListener("click", () => {
+      pendingImport = null;
+      closeModal("import-confirm-modal");
+    });
+  });
+  document.querySelectorAll("[data-confirm-import]").forEach((button) => {
+    button.addEventListener("click", confirmImport);
+  });
+  document.querySelectorAll("[data-restore-snapshot]").forEach((button) => {
+    button.addEventListener("click", restoreSnapshot);
+  });
   document.querySelectorAll("[data-close-goal-modal]").forEach((button) => {
     button.addEventListener("click", () => closeModal("goal-modal"));
   });
   document.querySelectorAll("[data-save-goal]").forEach((button) => {
     button.addEventListener("click", saveGoal);
+  });
+  document.querySelectorAll("[data-edit-session]").forEach((button) => {
+    button.addEventListener("click", editSessionNotes);
+  });
+  document.querySelectorAll("[data-dock-pause]").forEach((button) => {
+    button.addEventListener("click", togglePause);
+  });
+  document.querySelectorAll("[data-dock-stop]").forEach((button) => {
+    button.addEventListener("click", stopTimer);
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden" && (isRunning || isPaused)) persistActiveSession();
+    if (document.visibilityState === "visible" && isRunning && !isPaused) requestWakeLock();
+  });
+  window.addEventListener("pagehide", () => {
+    if (isRunning || isPaused) persistActiveSession();
   });
 
   ["pointermove", "touchstart", "click", "keydown"].forEach((eventName) => {
@@ -140,37 +182,32 @@ function bindEvents() {
 }
 
 function loadPomodoroConfig() {
+  const limits = {
+    studyMin: [1, 180],
+    shortBreakMin: [1, 60],
+    longBreakMin: [1, 120],
+    roundsBeforeLong: [1, 12],
+  };
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE.POMODORO) || "null");
     if (!saved || typeof saved !== "object") {
-      localStorage.setItem(STORAGE.POMODORO, JSON.stringify({ ...pomodoroConfig }));
+      safeSetItem(STORAGE.POMODORO, JSON.stringify({ ...pomodoroConfig }));
       return;
     }
 
-    const nextConfig = {
-      studyMin: Number(saved.studyMin) || pomodoroConfig.studyMin,
-      shortBreakMin: Number(saved.shortBreakMin) || pomodoroConfig.shortBreakMin,
-      longBreakMin: Number(saved.longBreakMin) || pomodoroConfig.longBreakMin,
-      roundsBeforeLong: Number(saved.roundsBeforeLong) || pomodoroConfig.roundsBeforeLong,
-    };
-
-    Object.keys(nextConfig).forEach((key) => {
-      const value = Number(nextConfig[key]);
-      if (!Number.isFinite(value) || value < 1) {
-        nextConfig[key] = pomodoroConfig[key];
-      }
+    const nextConfig = {};
+    Object.keys(limits).forEach((key) => {
+      const value = Number(saved[key]);
+      const [minimum, maximum] = limits[key];
+      nextConfig[key] = Number.isInteger(value) && value >= minimum && value <= maximum
+        ? value
+        : pomodoroConfig[key];
     });
-
     Object.assign(pomodoroConfig, nextConfig);
-    localStorage.setItem(STORAGE.POMODORO, JSON.stringify({ ...pomodoroConfig }));
+    safeSetItem(STORAGE.POMODORO, JSON.stringify({ ...pomodoroConfig }));
   } catch (error) {
-    Object.assign(pomodoroConfig, {
-      studyMin: 25,
-      shortBreakMin: 5,
-      longBreakMin: 15,
-      roundsBeforeLong: 4,
-    });
-    localStorage.setItem(STORAGE.POMODORO, JSON.stringify({ ...pomodoroConfig }));
+    Object.assign(pomodoroConfig, { studyMin: 25, shortBreakMin: 5, longBreakMin: 15, roundsBeforeLong: 4 });
+    safeSetItem(STORAGE.POMODORO, JSON.stringify({ ...pomodoroConfig }));
   }
 
   pomodoroState.phase = "study";
@@ -182,15 +219,20 @@ function handlePomodoroConfigChange(event) {
   const field = event.target.dataset.configField;
   if (!field) return;
 
+  const limits = {
+    studyMin: [1, 180],
+    shortBreakMin: [1, 60],
+    longBreakMin: [1, 120],
+    roundsBeforeLong: [1, 12],
+  };
+  if (!limits[field]) return;
   const parsed = Number(event.target.value);
-  const safeValue = Number.isFinite(parsed) ? Math.max(1, Math.round(parsed)) : 1;
+  const [minimum, maximum] = limits[field];
+  const safeValue = Number.isInteger(parsed) ? Math.min(maximum, Math.max(minimum, parsed)) : pomodoroConfig[field];
+  event.target.value = String(safeValue);
 
-  if (field === "studyMin") pomodoroConfig.studyMin = safeValue;
-  if (field === "shortBreakMin") pomodoroConfig.shortBreakMin = safeValue;
-  if (field === "longBreakMin") pomodoroConfig.longBreakMin = safeValue;
-  if (field === "roundsBeforeLong") pomodoroConfig.roundsBeforeLong = safeValue;
-
-  localStorage.setItem(STORAGE.POMODORO, JSON.stringify({ ...pomodoroConfig }));
+  pomodoroConfig[field] = safeValue;
+  safeSetItem(STORAGE.POMODORO, JSON.stringify({ ...pomodoroConfig }));
 
   if (!isRunning && !isPaused) {
     pomodoroState.phase = "study";
@@ -231,6 +273,8 @@ function getPomodoroPhaseText() {
 }
 
 function renderPomodoroState() {
+  const signature = `${timerMode}|${pomodoroState.phase}|${pomodoroState.roundIndex}|${pomodoroConfig.roundsBeforeLong}|${isRunning}|${isPaused}`;
+  if (signature === lastPomodoroRender) return;
   const phaseLabel = document.querySelector(".phase-label");
   const roundDots = document.querySelector(".round-dots");
   const configPanel = document.querySelector(".pomodoro-config");
@@ -277,6 +321,7 @@ function renderPomodoroState() {
   if (shortInput) shortInput.value = String(pomodoroConfig.shortBreakMin);
   if (longInput) longInput.value = String(pomodoroConfig.longBreakMin);
   if (roundsInput) roundsInput.value = String(pomodoroConfig.roundsBeforeLong);
+  lastPomodoroRender = signature;
 }
 
 function renderTimer() {
@@ -289,6 +334,8 @@ function renderTimer() {
   if (pauseBtn) pauseBtn.classList.toggle("hidden", !isRunning);
   if (stopBtn) stopBtn.classList.toggle("hidden", !isRunning);
   if (pauseBtn) pauseBtn.textContent = isPaused ? "Reanudar" : "Pausar";
+
+  updateSessionDock();
 
   if (!timerDisplay) return;
 
@@ -326,18 +373,43 @@ function startTimer() {
   startTime = Date.now() - elapsedTime;
   isRunning = true;
   isPaused = false;
+  longSessionWarned = false;
+  veryLongSessionWarned = false;
+  lastPersistAt = 0;
 
   clearInterval(timerInterval);
   timerInterval = setInterval(tick, 250);
+  requestWakeLock();
   persistActiveSession();
+  lastPersistAt = Date.now();
   renderTimer();
   updateGoalBar();
+}
+
+function updateSessionDock() {
+  const dock = document.getElementById("active-session-dock");
+  const dockSubject = document.getElementById("session-dock-subject");
+  const dockTime = document.getElementById("session-dock-time");
+  const dockPause = document.querySelector("[data-dock-pause]");
+  if (dockSubject) dockSubject.textContent = subjects.find((item) => item.id === activeTimerSubjectId)?.name || "Materia";
+  if (dockTime) dockTime.textContent = formatMs(elapsedTime);
+  if (dockPause) dockPause.textContent = isPaused ? "Reanudar" : "Pausar";
+  if (dock) dock.classList.toggle("hidden", !(isRunning || isPaused) || currentView === "detail");
 }
 
 function tick() {
   if (!isRunning) return;
 
-  elapsedTime = Date.now() - startTime;
+  const next = Date.now() - startTime;
+  elapsedTime = Number.isFinite(next) && next >= 0 ? next : 0;
+  if (timerMode === "stopwatch" && elapsedTime > 4 * 60 * 60 * 1000 && !longSessionWarned) {
+    longSessionWarned = true;
+    showToast("Sesión de más de 4 horas. Revisa si sigue activa.", "error");
+  }
+  if (timerMode === "stopwatch" && elapsedTime > 12 * 60 * 60 * 1000 && !veryLongSessionWarned) {
+    veryLongSessionWarned = true;
+    showToast("Sesión muy larga. ¿Sigues estudiando?", "error");
+  }
   if (timerMode === "pomodoro") {
     const remainingMs = pomodoroState.phaseDurationMs - elapsedTime;
     if (remainingMs <= 0) {
@@ -347,17 +419,21 @@ function tick() {
   }
 
   renderTimer();
-  persistActiveSession();
+  if (Date.now() - lastPersistAt > 1000) {
+    persistActiveSession();
+    lastPersistAt = Date.now();
+  }
   updateGoalBar();
 }
 
 function advancePomodoroPhase() {
   const previousPhase = pomodoroState.phase;
   const sessionStartTime = startTime ? new Date(startTime) : new Date();
+  let studySaved = false;
 
   if (previousPhase === "study") {
     const studySession = {
-      id: Date.now().toString(),
+      id: generateId(),
       subjectId: activeTimerSubjectId || currentSubjectId,
       durationMs: Number(pomodoroState.phaseDurationMs) || 0,
       startTimeISO: sessionStartTime.toISOString(),
@@ -369,10 +445,17 @@ function advancePomodoroPhase() {
 
     if (studySession.subjectId) {
       sessions.push(studySession);
-      saveData();
+      studySaved = saveData();
+      if (currentView === "stats") {
+        updateStats();
+        updateGoalBar();
+        updateChart();
+      }
+      if (currentView === "subjects") renderSubjects();
+      if (currentView === "detail") renderSessions();
     }
 
-    showToast(`Ronda ${pomodoroState.roundIndex} guardada`);
+    if (studySaved) showToast(`Ronda ${pomodoroState.roundIndex} guardada`);
 
     if (pomodoroState.roundIndex === pomodoroConfig.roundsBeforeLong) {
       pomodoroState.phase = "longBreak";
@@ -393,33 +476,18 @@ function advancePomodoroPhase() {
 
   elapsedTime = 0;
   startTime = Date.now();
+  updateTimerAnnouncement(`${getPomodoroPhaseText()} iniciada`);
 
+  playChime();
   try {
-    const AudioCtor = window.AudioContext || window.webkitAudioContext;
-    if (AudioCtor) {
-      const audioContext = new AudioCtor();
-      const notes = [220, 330, 440];
-      notes.forEach((frequency, index) => {
-        const oscillator = audioContext.createOscillator();
-        const gain = audioContext.createGain();
-        oscillator.type = "sine";
-        oscillator.frequency.value = frequency;
-        gain.gain.value = 0.0001;
-        oscillator.connect(gain);
-        gain.connect(audioContext.destination);
-        oscillator.start(audioContext.currentTime + index * 0.08);
-        gain.gain.exponentialRampToValueAtTime(0.08, audioContext.currentTime + index * 0.08 + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + index * 0.08 + 0.18);
-        oscillator.stop(audioContext.currentTime + index * 0.08 + 0.2);
-      });
-    }
     if ("vibrate" in navigator) navigator.vibrate(200);
   } catch (error) {
-    // No-op: no se requiere permisos ni notificaciones del sistema.
+    // No-op
   }
 
   renderTimer();
   persistActiveSession();
+  lastPersistAt = Date.now();
   updateGoalBar();
 }
 
@@ -437,13 +505,16 @@ function togglePause() {
     isPaused = true;
   }
 
+  updateTimerAnnouncement(isPaused ? "Sesión en pausa" : "Sesión reanudada");
   persistActiveSession();
+  lastPersistAt = Date.now();
   renderTimer();
 }
 
 function finalizeSession() {
   isRunning = false;
   isPaused = false;
+  releaseWakeLock();
   updateFocusMode();
   const sessionSubjectId = activeTimerSubjectId || currentSubjectId;
   const sessionSubject = subjects.find((subjectItem) => subjectItem.id === sessionSubjectId) || subject();
@@ -462,10 +533,13 @@ function finalizeSession() {
 }
 
 function stopTimer() {
-  clearInterval(timerInterval);
-  timerInterval = null;
+  updateTimerAnnouncement("Sesión detenida");
 
   if (timerMode === "pomodoro") {
+    if (!isPaused && startTime !== null) elapsedTime = Math.max(0, Date.now() - startTime);
+    persistActiveSession();
+    clearInterval(timerInterval);
+    timerInterval = null;
     if (pomodoroState.phase === "study" && elapsedTime >= 1000) {
       finalizeSession();
       return;
@@ -479,28 +553,19 @@ function stopTimer() {
   }
 
   if (!isPaused && startTime !== null) {
-    elapsedTime = Date.now() - startTime;
+    const next = Date.now() - startTime;
+    elapsedTime = Number.isFinite(next) && next >= 0 ? next : 0;
   }
 
+  persistActiveSession();
+  clearInterval(timerInterval);
+  timerInterval = null;
   finalizeSession();
 }
 
 function resetTimer() {
-  clearInterval(timerInterval);
-  timerInterval = null;
-  elapsedTime = 0;
-  startTime = null;
-  isRunning = false;
-  isPaused = false;
-  activeTimerSubjectId = null;
-  localStorage.removeItem(STORAGE.ACTIVE);
-
-  if (timerMode === "pomodoro") {
-    pomodoroState.phase = "study";
-    pomodoroState.roundIndex = 1;
-    pomodoroState.phaseDurationMs = pomodoroConfig.studyMin * 60000;
-  }
-
+  releaseWakeLock();
+  resetAllTimerState();
   document.querySelectorAll("#timer-display .t-d").forEach((node) => {
     node.textContent = "00";
   });
@@ -509,6 +574,28 @@ function resetTimer() {
   renderTimer();
   updateGoalBar();
   updateFocusMode();
+}
+
+function resetAllTimerState() {
+  clearInterval(timerInterval);
+  timerInterval = null;
+  elapsedTime = 0;
+  startTime = null;
+  isRunning = false;
+  isPaused = false;
+  activeTimerSubjectId = null;
+  timerMode = "stopwatch";
+  pomodoroState.phase = "study";
+  pomodoroState.roundIndex = 1;
+  pomodoroState.phaseDurationMs = pomodoroConfig.studyMin * 60000;
+  longSessionWarned = false;
+  veryLongSessionWarned = false;
+  lastPomodoroRender = "";
+  currentSessionId = null;
+  releaseWakeLock();
+  resetSessionForm();
+  localStorage.removeItem(STORAGE.ACTIVE);
+  updateTimerAnnouncement("Sesión detenida");
 }
 
 function renderApp() {
@@ -528,12 +615,15 @@ function renderApp() {
     updateChart();
     window.setTimeout(() => chartInstance?.resize(), 50);
   }
+  updateSessionDock();
+  updateFocusMode();
 }
 
 function switchTab(view) {
   if (!view || !["subjects", "stats"].includes(view)) return;
   currentView = view;
   renderApp();
+  updateFocusMode();
 }
 
 function subject() {
@@ -555,13 +645,14 @@ function renderSubjects() {
       const subjectName = subjects.find((s) => s.id === activeTimerSubjectId)?.name || "materia";
       banner.textContent = `Sesión activa en ${subjectName}`;
       banner.classList.remove("hidden");
+      banner.classList.toggle("banner--warning", activeTimerSubjectId !== currentSubjectId);
     } else {
       banner.classList.add("hidden");
+      banner.classList.remove("banner--warning");
     }
   }
 
   subjects.forEach((subjectItem, index) => {
-    const progress = max ? Math.max((subjectItem.totalMs / max) * 100, 4) : 0;
     const card = document.createElement("button");
     card.type = "button";
     card.className = "subject-card";
@@ -574,7 +665,6 @@ function renderSubjects() {
       <div class="subject-card-body">
         <span class="subject-name">${escapeHTML(subjectItem.name)}</span>
         <span class="subject-total">${formatShort(subjectItem.totalMs)}</span>
-        <span class="subject-progress" aria-hidden="true"><span style="width:${progress}%"></span></span>
       </div>
     `;
     card.addEventListener("click", () => openSubject(subjectItem.id));
@@ -590,6 +680,10 @@ function renderSubjects() {
 }
 
 function openSubject(id) {
+  if (activeTimerSubjectId && activeTimerSubjectId !== id) {
+    showToast("Hay una sesión activa en otra materia. Deténla primero.", "error");
+    return;
+  }
   currentSubjectId = id;
   currentView = "detail";
   renderApp();
@@ -598,6 +692,7 @@ function openSubject(id) {
 function goToSubjects() {
   currentView = "subjects";
   renderApp();
+  updateFocusMode();
 }
 
 function openSubjectModal() {
@@ -623,7 +718,7 @@ function createSubject() {
   }
 
   subjects.push({
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    id: generateId(),
     name,
     createdAt: new Date().toISOString(),
     totalMs: 0,
@@ -635,6 +730,9 @@ function createSubject() {
 }
 
 function renderDetail() {
+  if (activeTimerSubjectId && currentSubjectId !== activeTimerSubjectId) {
+    currentSubjectId = activeTimerSubjectId;
+  }
   const selectedSubject = subject();
   if (!selectedSubject) return goToSubjects();
 
@@ -652,6 +750,20 @@ function saveSession() {
   const tagsInput = document.getElementById("modal-tags");
   const notesInput = document.getElementById("modal-notes");
   const moodSelect = document.getElementById("modal-mood");
+  if (currentSessionId) {
+    const existingSession = sessions.find((session) => session.id === currentSessionId);
+    if (existingSession && tagsInput && notesInput && moodSelect) {
+      existingSession.notes = notesInput.value;
+      existingSession.mood = moodSelect.value;
+      existingSession.tags = tagsInput.value.split(",").map((tag) => tag.trim()).filter(Boolean);
+      saveData();
+      currentSessionId = null;
+      resetSessionForm();
+      closeModal("notes-modal");
+      renderApp();
+      return;
+    }
+  }
   const sessionSubjectId = activeTimerSubjectId || currentSubjectId;
 
   if (!sessionSubjectId || !tagsInput || !notesInput || !moodSelect) {
@@ -659,8 +771,8 @@ function saveSession() {
     return;
   }
 
-  sessions.push({
-    id: Date.now().toString(),
+  const savedSession = {
+    id: currentSessionId || generateId(),
     subjectId: sessionSubjectId,
     durationMs: Number(elapsedTime) || 0,
     startTimeISO: new Date(now - elapsedTime).toISOString(),
@@ -671,9 +783,17 @@ function saveSession() {
       .split(",")
       .map((tag) => tag.trim())
       .filter(Boolean),
-  });
+  };
+
+  const existingIndex = sessions.findIndex((session) => session.id === currentSessionId);
+  if (currentSessionId && existingIndex !== -1) {
+    sessions[existingIndex] = { ...sessions[existingIndex], ...savedSession };
+  } else {
+    sessions.push(savedSession);
+  }
 
   saveData();
+  currentSessionId = null;
   resetSessionForm();
   resetTimer();
   closeModal("notes-modal");
@@ -681,18 +801,26 @@ function saveSession() {
 }
 
 function discardSession() {
+  if (currentSessionId) {
+    currentSessionId = null;
+    resetSessionForm();
+    closeModal("notes-modal");
+    return;
+  }
   resetSessionForm();
   resetTimer();
   closeModal("notes-modal");
 }
 
 function resetSessionForm() {
+  const title = document.getElementById("notes-modal-title");
   const notes = document.getElementById("modal-notes");
   const tags = document.getElementById("modal-tags");
   const moodSelect = document.getElementById("modal-mood");
   const moodDots = document.querySelectorAll(".mood-dot");
   const currentMood = document.getElementById("mood-current-label");
 
+  if (title) title.textContent = "Sesión finalizada";
   if (notes) notes.value = "";
   if (tags) tags.value = "";
   if (moodSelect) moodSelect.value = "";
@@ -722,21 +850,40 @@ function chooseMood(value) {
 }
 
 function loadData() {
-  try {
-    subjects = JSON.parse(localStorage.getItem(STORAGE.SUBJECTS) || "[]");
-  } catch (error) {
-    subjects = [];
-    localStorage.removeItem(STORAGE.SUBJECTS);
-  }
-
-  try {
-    sessions = JSON.parse(localStorage.getItem(STORAGE.SESSIONS) || "[]");
-  } catch (error) {
-    sessions = [];
-    localStorage.removeItem(STORAGE.SESSIONS);
-  }
-
+  subjects = parseStoredArray(STORAGE.SUBJECTS).filter((item) => (
+    item && typeof item.id === "string" && item.id.trim() && typeof item.name === "string"
+  ));
+  sessions = parseStoredArray(STORAGE.SESSIONS).filter((item) => (
+    item &&
+    typeof item.id === "string" &&
+    typeof item.subjectId === "string" &&
+    Number.isFinite(item.durationMs) &&
+    item.durationMs >= 0 &&
+    typeof item.startTimeISO === "string" &&
+    !Number.isNaN(new Date(item.startTimeISO).getTime())
+  ));
   syncTotals();
+}
+
+function parseStoredArray(key) {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || "[]");
+    if (Array.isArray(value)) return value;
+  } catch (error) {
+    // Invalid persisted JSON is discarded below.
+  }
+  localStorage.removeItem(key);
+  return [];
+}
+
+function safeSetItem(key, value) {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (error) {
+    showToast("No se pudo guardar. Revisa el espacio del navegador.", "error");
+    return false;
+  }
 }
 
 function syncTotals() {
@@ -749,8 +896,9 @@ function syncTotals() {
 
 function saveData() {
   syncTotals();
-  localStorage.setItem(STORAGE.SUBJECTS, JSON.stringify(subjects));
-  localStorage.setItem(STORAGE.SESSIONS, JSON.stringify(sessions));
+  const subjectsSaved = safeSetItem(STORAGE.SUBJECTS, JSON.stringify(subjects));
+  const sessionsSaved = safeSetItem(STORAGE.SESSIONS, JSON.stringify(sessions));
+  return subjectsSaved && sessionsSaved;
 }
 
 function renderSessions() {
@@ -758,7 +906,10 @@ function renderSessions() {
   const count = document.getElementById("sessions-count");
   if (!box) return;
 
-  const list = sessions.filter((session) => session.subjectId === currentSubjectId);
+  const list = sessions
+    .filter((session) => session.subjectId === currentSubjectId)
+    .slice()
+    .sort((a, b) => new Date(b.startTimeISO) - new Date(a.startTimeISO));
   if (count) count.textContent = String(list.length);
 
   if (!list.length) {
@@ -770,10 +921,10 @@ function renderSessions() {
     .map((session, index) => {
       const tags = Array.isArray(session.tags) && session.tags.length ? session.tags.join(", ") : "Sin etiqueta";
       return `
-        <button type="button" class="session-item" data-id="${session.id}" style="--i:${index}">
+        <button type="button" class="session-item" data-id="${escapeAttr(session.id)}" style="--i:${index}">
           <span class="session-date">${formatDate(session.startTimeISO)}</span>
           <span class="session-duration">${formatMs(session.durationMs)}</span>
-          <span class="session-tags" title="${escapeHTML(tags)}">${escapeHTML(tags)}</span>
+          <span class="session-tags" title="${escapeAttr(tags)}">${escapeHTML(tags)}</span>
           <span class="session-arrow" aria-hidden="true">→</span>
         </button>
       `;
@@ -788,6 +939,9 @@ function renderSessions() {
 function openSession(id) {
   const session = sessions.find((item) => item.id === id);
   if (!session) return;
+  currentSessionId = id;
+  const editButton = document.querySelector("[data-edit-session]");
+  if (editButton) editButton.classList.toggle("hidden", session.notes !== "" || session.mood !== "");
 
   const subjectName = subjects.find((item) => item.id === session.subjectId)?.name || "Materia";
   const moodText = session.mood && MOOD_LABELS[session.mood] ? MOOD_LABELS[session.mood] : "Sin especificar";
@@ -817,7 +971,39 @@ function openSession(id) {
   openModal("detail-modal", document.activeElement);
 }
 
+function editSessionNotes() {
+  const sessionId = currentSessionId;
+  const session = sessions.find((item) => item.id === sessionId);
+  if (!session) return;
+  const notes = document.getElementById("modal-notes");
+  const tags = document.getElementById("modal-tags");
+  const mood = document.getElementById("modal-mood");
+  const summary = document.getElementById("modal-session-summary");
+  const modalTitle = document.getElementById("notes-modal-title");
+  if (modalTitle) modalTitle.textContent = "Editar notas";
+  if (notes) notes.value = session.notes || "";
+  if (tags) tags.value = Array.isArray(session.tags) ? session.tags.join(", ") : "";
+  if (mood) mood.value = session.mood || "";
+  document.querySelectorAll(".mood-dot").forEach((dot) => {
+    const selected = dot.dataset.mood === session.mood;
+    dot.classList.toggle("selected", selected);
+    dot.setAttribute("aria-checked", String(selected));
+  });
+  const currentMood = document.getElementById("mood-current-label");
+  if (currentMood) currentMood.textContent = session.mood ? MOOD_LABELS[session.mood] : "Sin ánimo";
+  if (summary) {
+    const subjectName = subjects.find((item) => item.id === session.subjectId)?.name || "Materia";
+    summary.textContent = `${subjectName} · ${formatMs(session.durationMs)}`;
+  }
+  closeModal("detail-modal");
+  window.setTimeout(() => {
+    currentSessionId = sessionId;
+    openModal("notes-modal", document.activeElement);
+  }, 220);
+}
+
 function closeDetailModal() {
+  currentSessionId = null;
   closeModal("detail-modal");
 }
 
@@ -825,21 +1011,36 @@ function closeModal(id) {
   const modal = document.getElementById(id);
   if (!modal) return;
 
+  if (modal._closeTimeout) {
+    clearTimeout(modal._closeTimeout);
+    modal._closeTimeout = null;
+  }
   modal.classList.add("is-closing");
-  window.setTimeout(() => {
+  const closeTimeout = window.setTimeout(() => {
+    if (modal._closeTimeout !== closeTimeout) return;
+    modal._closeTimeout = null;
     modal.classList.add("hidden");
     modal.classList.remove("is-closing");
+    document.body.style.overflow = modal._previousOverflow || "";
     const restoreTarget = modal._returnFocus;
     if (restoreTarget && typeof restoreTarget.focus === "function") {
       restoreTarget.focus();
     }
   }, 200);
+  modal._closeTimeout = closeTimeout;
 }
 
 function openModal(id, trigger) {
   const modal = document.getElementById(id);
   if (!modal) return;
 
+  const wasVisible = !modal.classList.contains("hidden");
+  if (modal._closeTimeout) {
+    clearTimeout(modal._closeTimeout);
+    modal._closeTimeout = null;
+  }
+  if (!wasVisible) modal._previousOverflow = document.body.style.overflow;
+  document.body.style.overflow = "hidden";
   modal._returnFocus = trigger || document.activeElement;
   modal.classList.remove("hidden");
   modal.classList.remove("is-closing");
@@ -881,14 +1082,57 @@ function updateStats() {
   if (statWeek) statWeek.textContent = formatShort(weekTotal);
   if (statAverage) statAverage.textContent = formatShort(avg);
   if (statStreak) statStreak.textContent = `${streak} día${streak === 1 ? "" : "s"}`;
+  renderHeatmap();
 }
 
 function today() {
+  const now = new Date();
   const dayStart = new Date();
   dayStart.setHours(0, 0, 0, 0);
   return sessions
-    .filter((session) => new Date(session.startTimeISO) >= dayStart)
+    .filter((session) => {
+      const started = new Date(session.startTimeISO);
+      return started >= dayStart && started <= now;
+    })
     .reduce((total, session) => total + Number(session.durationMs || 0), 0);
+}
+
+function renderHeatmap() {
+  const grid = document.getElementById("heatmap-grid");
+  if (!grid) return;
+  const dayStart = new Date();
+  dayStart.setHours(0, 0, 0, 0);
+  dayStart.setDate(dayStart.getDate() - 89);
+  const days = [];
+
+  for (let offset = 0; offset < 90; offset += 1) {
+    const date = new Date(dayStart);
+    date.setDate(dayStart.getDate() + offset);
+    const nextDate = new Date(date);
+    nextDate.setDate(date.getDate() + 1);
+    const total = sessions.reduce((sum, session) => {
+      const started = new Date(session.startTimeISO);
+      return started >= date && started < nextDate ? sum + Number(session.durationMs || 0) : sum;
+    }, 0);
+    days.push({ date, total });
+  }
+
+  const positiveTotals = days.map((day) => day.total).filter((total) => total > 0).sort((a, b) => a - b);
+  const thresholds = [0.25, 0.5, 0.75].map((quartile) => (
+    positiveTotals.length ? positiveTotals[Math.max(0, Math.ceil(positiveTotals.length * quartile) - 1)] : Infinity
+  ));
+  grid.replaceChildren();
+  days.forEach((day) => {
+    let level = 0;
+    if (day.total > 0) {
+      level = day.total <= thresholds[0] ? 1 : day.total <= thresholds[1] ? 2 : day.total <= thresholds[2] ? 3 : 4;
+    }
+    const cell = document.createElement("span");
+    cell.className = `heatmap-cell level-${level}`;
+    cell.title = `${day.date.toLocaleDateString("es-ES")}: ${formatShort(day.total)}`;
+    cell.setAttribute("aria-label", `${day.date.toLocaleDateString("es-ES")}: ${formatShort(day.total)}`);
+    grid.appendChild(cell);
+  });
 }
 
 function updateGoalBar() {
@@ -928,6 +1172,66 @@ function updateFocusMode() {
   if (!shouldFocus) document.body.classList.remove("focus-awake");
 }
 
+async function requestWakeLock() {
+  if (!("wakeLock" in navigator) || wakeLock) return;
+  try {
+    const requestedWakeLock = await navigator.wakeLock.request("screen");
+    if (!isRunning || isPaused) {
+      await requestedWakeLock.release();
+      return;
+    }
+    wakeLock = requestedWakeLock;
+  } catch (error) {
+    // Wake Lock is optional and may be unavailable in the current browser state.
+  }
+}
+
+function releaseWakeLock() {
+  if (!wakeLock) return;
+  const currentWakeLock = wakeLock;
+  wakeLock = null;
+  try {
+    currentWakeLock.release().catch(function () {});
+  } catch (error) {
+    // Wake Lock release is best-effort.
+  }
+}
+
+async function playChime() {
+  try {
+    const AudioCtor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtor) return;
+    if (!audioContext) audioContext = new AudioCtor();
+    if (audioContext.state === "suspended") await audioContext.resume();
+    const notes = [220, 330, 440];
+    notes.forEach((frequency, index) => {
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.value = frequency;
+      gain.gain.value = 0.0001;
+      oscillator.connect(gain);
+      gain.connect(audioContext.destination);
+      oscillator.start(audioContext.currentTime + index * 0.08);
+      gain.gain.exponentialRampToValueAtTime(0.08, audioContext.currentTime + index * 0.08 + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + index * 0.08 + 0.18);
+      oscillator.stop(audioContext.currentTime + index * 0.08 + 0.2);
+    });
+  } catch (error) {
+    // Audio is optional and failures should not interrupt the timer.
+  }
+}
+
+function updateTimerAnnouncement(message) {
+  const announcement = document.getElementById("timer-a11y");
+  if (announcement) announcement.textContent = message;
+}
+
+function generateId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 function revealFocusMode(event) {
   if (!document.body.classList.contains("focus-mode")) return;
   if (event && event.type === "keydown" && event.key === "Tab") return;
@@ -937,8 +1241,14 @@ function revealFocusMode(event) {
 }
 
 function loadGoal() {
-  const value = Number(localStorage.getItem(STORAGE.GOAL));
-  if (Number.isFinite(value) && value > 0) dailyGoalMs = value * 60 * 60 * 1000;
+  const stored = localStorage.getItem(STORAGE.GOAL);
+  const value = Number(stored);
+  if (Number.isFinite(value) && value >= 0.5 && value <= 24) {
+    dailyGoalMs = value * 60 * 60 * 1000;
+  } else if (stored !== null) {
+    dailyGoalMs = 2 * 60 * 60 * 1000;
+    localStorage.removeItem(STORAGE.GOAL);
+  }
 }
 
 function editDailyGoal() {
@@ -960,16 +1270,16 @@ function saveGoal() {
   if (!field) return;
 
   const value = Number(field.value);
-  if (!Number.isFinite(value) || value < 0.5) {
+  if (!Number.isFinite(value) || value < 0.5 || value > 24) {
     if (error) {
-      error.textContent = "La meta debe ser de al menos 0.5h.";
+      error.textContent = "La meta debe estar entre 0.5h y 24h.";
       error.classList.remove("hidden");
     }
     return;
   }
 
   dailyGoalMs = value * 60 * 60 * 1000;
-  localStorage.setItem(STORAGE.GOAL, String(value));
+  safeSetItem(STORAGE.GOAL, String(value));
 
   if (error) {
     error.textContent = "";
@@ -993,10 +1303,10 @@ function initChart() {
       labels: initial.labels,
       datasets: [{
         data: initial.values.map((value) => value / 60000),
-        backgroundColor: initial.values.map((_, index) => index === initial.values.length - 1 ? getComputedStyle(document.body).getPropertyValue("--fg").trim() : hexToRgba(getComputedStyle(document.body).getPropertyValue("--fg").trim(), 0.32)),
-        borderRadius: 8,
+        backgroundColor: initial.values.map((_, index) => index === initial.values.length - 1 ? getComputedStyle(document.body).getPropertyValue("--fg").trim() : "#e3e3de"),
+        borderRadius: 4,
         borderSkipped: false,
-        maxBarThickness: 28,
+        maxBarThickness: 24,
       }],
     },
     options: {
@@ -1011,8 +1321,8 @@ function initChart() {
           titleColor: getComputedStyle(document.body).getPropertyValue("--bg").trim(),
           bodyColor: getComputedStyle(document.body).getPropertyValue("--bg").trim(),
           borderWidth: 0,
-          cornerRadius: 12,
-          padding: 10,
+          cornerRadius: 4,
+          padding: 12,
           displayColors: false,
           callbacks: {
             title: (items) => {
@@ -1032,7 +1342,7 @@ function initChart() {
           grid: { display: false },
           ticks: {
             color: getComputedStyle(document.body).getPropertyValue("--fg-2").trim(),
-            font: { family: getComputedStyle(document.body).fontFamily, size: 12 },
+            font: { family: getComputedStyle(document.body).fontFamily, size: 11 },
           },
         },
         y: {
@@ -1041,7 +1351,7 @@ function initChart() {
           maxTicksLimit: 5,
           ticks: {
             color: getComputedStyle(document.body).getPropertyValue("--fg-2").trim(),
-            font: { family: getComputedStyle(document.body).fontFamily, size: 12 },
+            font: { family: getComputedStyle(document.body).fontFamily, size: 11 },
             callback: (value) => formatShort(value * 60000),
           },
         },
@@ -1084,12 +1394,13 @@ function updateChart() {
   const styles = getComputedStyle(document.body);
   const fg = styles.getPropertyValue("--fg").trim();
   const fg2 = styles.getPropertyValue("--fg-2").trim();
+  const line = styles.getPropertyValue("--line").trim();
   const dayData = getLast7Days();
   const todayIndex = dayData.values.length - 1;
 
   chartInstance.data.labels = dayData.labels;
   chartInstance.data.datasets[0].data = dayData.values.map((value) => value / 60000);
-  chartInstance.data.datasets[0].backgroundColor = dayData.values.map((_, index) => index === todayIndex ? fg : hexToRgba(fg, 0.32));
+  chartInstance.data.datasets[0].backgroundColor = dayData.values.map((_, index) => index === todayIndex ? fg : line);
 
   chartInstance.options.plugins.tooltip.backgroundColor = fg;
   chartInstance.options.plugins.tooltip.titleColor = styles.getPropertyValue("--bg").trim();
@@ -1101,22 +1412,13 @@ function updateChart() {
   chartInstance.update();
 }
 
-function hexToRgba(hex, alpha) {
-  const value = hex.replace("#", "");
-  const safe = value.length === 3 ? value.split("").map((char) => char + char).join("") : value;
-  const parsed = Number.parseInt(safe, 16);
-  const r = (parsed >> 16) & 255;
-  const g = (parsed >> 8) & 255;
-  const b = parsed & 255;
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
-
 function exportData() {
   const blob = new Blob([JSON.stringify({ subjects, sessions })], { type: "application/json" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
-  link.download = "tempomind-data.json";
+  link.download = `tempomind-data-${new Date().toISOString().slice(0, 10)}.json`;
   link.click();
+  window.setTimeout(() => URL.revokeObjectURL(link.href), 0);
 }
 
 function triggerImport() {
@@ -1124,7 +1426,8 @@ function triggerImport() {
 }
 
 function importData(event) {
-  const file = event.target.files && event.target.files[0];
+  const input = event.target;
+  const file = input.files && input.files[0];
   if (!file) return;
 
   const reader = new FileReader();
@@ -1136,93 +1439,217 @@ function importData(event) {
         return;
       }
 
-      subjects = parsed.subjects.map((subjectItem) => ({
-        ...subjectItem,
-        id: String(subjectItem.id),
-        name: String(subjectItem.name || "Materia"),
-        totalMs: Number(subjectItem.totalMs) || 0,
-      }));
+      const importedSubjects = parsed.subjects
+        .filter((item) => item && typeof item.id === "string" && item.id.trim() && typeof item.name === "string")
+        .map((item) => ({ ...item, id: item.id, name: item.name, totalMs: Number(item.totalMs) || 0 }));
+      const importedSubjectIds = new Set(importedSubjects.map((item) => item.id));
+      const importedSessions = parsed.sessions
+        .filter((session) => {
+          if (!session || typeof session !== "object") return false;
+          const startValid = typeof session.startTimeISO === "string" && !Number.isNaN(new Date(session.startTimeISO).getTime());
+          const endValid = typeof session.endTimeISO === "string" && !Number.isNaN(new Date(session.endTimeISO).getTime());
+          return typeof session.id === "string" &&
+            typeof session.subjectId === "string" &&
+            importedSubjectIds.has(session.subjectId) &&
+            startValid &&
+            endValid;
+        })
+        .map((session) => {
+          const duration = Number(session.durationMs);
+          const mood = ["1", "2", "3", "4", "5"].includes(String(session.mood || "")) ? String(session.mood) : "";
+          return {
+            ...session,
+            id: session.id,
+            subjectId: session.subjectId,
+            durationMs: Number.isFinite(duration) && duration >= 0 ? duration : 0,
+            notes: typeof session.notes === "string" ? session.notes : "",
+            mood,
+            tags: Array.isArray(session.tags)
+              ? session.tags.filter((tag) => typeof tag === "string").map((tag) => tag.trim()).filter(Boolean)
+              : [],
+          };
+        });
 
-      sessions = parsed.sessions.map((session) => ({
-        ...session,
-        id: String(session.id),
-        subjectId: String(session.subjectId),
-        durationMs: Number(session.durationMs) || 0,
-        notes: session.notes || "",
-        mood: session.mood || "",
-        tags: Array.isArray(session.tags) ? session.tags.map((tag) => String(tag)) : [],
-      }));
-
-      clearInterval(timerInterval);
-      timerInterval = null;
-      elapsedTime = 0;
-      startTime = null;
-      isRunning = false;
-      isPaused = false;
-      activeTimerSubjectId = null;
-      currentSubjectId = null;
-      localStorage.removeItem(STORAGE.ACTIVE);
-      saveData();
-      renderApp();
-      showToast("Datos importados correctamente", "success");
+      pendingImport = { subjects: importedSubjects, sessions: importedSessions };
+      const summary = document.getElementById("import-confirm-summary");
+      if (summary) summary.textContent = `Se reemplazarán ${importedSubjects.length} materias y ${importedSessions.length} sesiones.`;
+      updateSnapshotButtons();
+      openModal("import-confirm-modal", document.activeElement);
     } catch (error) {
       showToast("No se pudo importar el archivo JSON", "error");
+    } finally {
+      input.value = "";
     }
   };
-
+  reader.onerror = () => {
+    input.value = "";
+    showToast("No se pudo importar el archivo JSON", "error");
+  };
   reader.readAsText(file);
 }
 
+function confirmImport() {
+  if (!pendingImport) return;
+  const snapshotSaved = saveSnapshot();
+  clearTimeout(lastResetTimeout);
+  lastResetTimeout = null;
+  lastResetSnapshot = null;
+  subjects = pendingImport.subjects;
+  sessions = pendingImport.sessions;
+  resetAllTimerState();
+  currentSubjectId = null;
+  const dataSaved = saveData();
+  renderApp();
+  closeModal("import-confirm-modal");
+  pendingImport = null;
+  if (dataSaved && snapshotSaved) showToast("Datos importados correctamente", "success");
+  else if (dataSaved) showToast("Datos importados, pero no se pudo crear el backup.", "error");
+}
+
 function confirmResetData() {
+  const summary = document.getElementById("confirm-reset-summary");
+  if (summary) summary.textContent = `Se eliminarán ${subjects.length} materias y ${sessions.length} sesiones.`;
+  updateSnapshotButtons();
   openModal("confirm-modal", document.activeElement);
 }
 
 function performResetData() {
-  clearInterval(timerInterval);
-  timerInterval = null;
-  elapsedTime = 0;
-  startTime = null;
-  isRunning = false;
-  isPaused = false;
-  activeTimerSubjectId = null;
+  const snapshotSaved = saveSnapshot();
+  clearTimeout(lastResetTimeout);
+  lastResetSnapshot = { subjects: subjects.map((item) => ({ ...item })), sessions: sessions.map((item) => ({ ...item, tags: Array.isArray(item.tags) ? item.tags.slice() : [] })) };
+  lastResetTimeout = window.setTimeout(() => {
+    lastResetSnapshot = null;
+    lastResetTimeout = null;
+    if (toastAction && toastAction.onClick === undoReset) {
+      const toast = document.getElementById("toast");
+      toast?.querySelector("button")?.remove();
+      toastAction = null;
+    }
+  }, 5000);
+  resetAllTimerState();
   currentSubjectId = null;
   subjects = [];
   sessions = [];
-  localStorage.removeItem(STORAGE.ACTIVE);
-  saveData();
+  const dataSaved = saveData();
   closeModal("confirm-modal");
+  renderApp();
+  const message = dataSaved && snapshotSaved
+    ? "Datos borrados."
+    : "No se pudo guardar todo. ";
+  showToast(message, dataSaved && snapshotSaved ? "success" : "error", 6000, {
+    label: "Pulsa aquí para deshacer",
+    onClick: undoReset,
+  });
+}
+
+function undoReset() {
+  if (!lastResetSnapshot) return;
+  clearTimeout(lastResetTimeout);
+  lastResetTimeout = null;
+  subjects = lastResetSnapshot.subjects;
+  sessions = lastResetSnapshot.sessions;
+  lastResetSnapshot = null;
+  saveData();
   renderApp();
 }
 
-function showToast(message, type = "success") {
+function saveSnapshot() {
+  return safeSetItem(SNAPSHOT_KEY, JSON.stringify({
+    subjects,
+    sessions,
+    createdAt: new Date().toISOString(),
+  }));
+}
+
+function restoreSnapshot() {
+  let snapshot;
+  try {
+    snapshot = JSON.parse(localStorage.getItem(SNAPSHOT_KEY) || "null");
+  } catch (error) {
+    snapshot = null;
+  }
+  if (!snapshot || !Array.isArray(snapshot.subjects) || !Array.isArray(snapshot.sessions)) {
+    updateSnapshotButtons();
+    showToast("No hay backup disponible", "error");
+    return;
+  }
+  clearTimeout(lastResetTimeout);
+  lastResetTimeout = null;
+  lastResetSnapshot = null;
+  subjects = snapshot.subjects;
+  sessions = snapshot.sessions;
+  resetAllTimerState();
+  currentSubjectId = null;
+  const dataSaved = saveData();
+  renderApp();
+  const activeModal = document.querySelector(".modal-overlay:not(.hidden)");
+  if (activeModal) closeModal(activeModal.id);
+  pendingImport = null;
+  if (dataSaved) showToast("Backup restaurado", "success");
+}
+
+function updateSnapshotButtons() {
+  let available = false;
+  try {
+    const snapshot = JSON.parse(localStorage.getItem(SNAPSHOT_KEY) || "null");
+    available = Boolean(snapshot && Array.isArray(snapshot.subjects) && Array.isArray(snapshot.sessions));
+  } catch (error) {
+    available = false;
+  }
+  document.querySelectorAll("[data-restore-snapshot]").forEach((button) => {
+    button.disabled = !available;
+    button.title = available ? "" : "No hay backup disponible";
+  });
+}
+
+function showToast(message, type = "success", duration = 2500, action) {
   const toast = document.getElementById("toast");
   if (!toast) return;
 
   clearTimeout(toastTimeout);
-  toast.textContent = message;
+  clearTimeout(toastActionTimeout);
+  toast.replaceChildren(document.createTextNode(message));
+  toastAction = action || null;
+  if (action) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "btn btn-ghost btn-small";
+    button.textContent = action.label;
+    button.addEventListener("click", () => {
+      toast.classList.remove("is-visible");
+      if (toastAction && typeof toastAction.onClick === "function") toastAction.onClick();
+    });
+    toast.appendChild(document.createTextNode(" "));
+    toast.appendChild(button);
+  }
+  toast.setAttribute("role", type === "error" ? "alert" : "status");
+  toast.setAttribute("aria-live", type === "error" ? "assertive" : "polite");
+  toast.classList.remove("toast--error", "toast--success");
+  toast.classList.add(type === "error" ? "toast--error" : "toast--success");
   toast.classList.remove("is-visible");
   toast.classList.add("is-visible");
-  toastTimeout = setTimeout(() => toast.classList.remove("is-visible"), 2500);
+  toastTimeout = setTimeout(() => toast.classList.remove("is-visible"), duration);
+  if (action) toastActionTimeout = toastTimeout;
 }
 
 function toggleTheme() {
-  const isLight = document.body.classList.toggle("light");
-  localStorage.setItem(STORAGE.THEME, isLight ? "light" : "dark");
+  const isDark = document.body.classList.toggle("dark");
+  safeSetItem(STORAGE.THEME, isDark ? "dark" : "light");
   updateThemeColor();
   if (currentView === "stats") updateChart();
 }
 
 function loadTheme() {
   const saved = localStorage.getItem(STORAGE.THEME);
-  const light = saved ? saved === "light" : window.matchMedia?.("(prefers-color-scheme: light)")?.matches;
-  document.body.classList.toggle("light", Boolean(light));
+  const dark = saved ? saved === "dark" : Boolean(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  document.body.classList.toggle("dark", Boolean(dark));
   updateThemeColor();
 }
 
 function updateThemeColor() {
   const meta = document.querySelector('meta[name="theme-color"]');
   if (!meta) return;
-  meta.setAttribute("content", document.body.classList.contains("light") ? "#ffffff" : "#000000");
+  meta.setAttribute("content", document.body.classList.contains("dark") ? "#1a1614" : "#d7d7d0");
 }
 
 function formatMs(ms) {
@@ -1258,16 +1685,41 @@ function escapeHTML(value) {
   return String(value).replace(/[&<>]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[char]);
 }
 
+function escapeAttr(value) {
+  return escapeHTML(value).replace(/"/g, "&amp;quot;").replace(/'/g, "&amp;#39;");
+}
+
 function handleKeyboard(event) {
-  const interactiveTarget = event.target && event.target.closest("button, a, input, textarea, select, [contenteditable]");
+  const interactiveTarget = event.target && typeof event.target.closest === "function" &&
+    event.target.closest("button, a, input, textarea, select, [contenteditable]");
   const modalOpen = document.querySelector(".modal-overlay:not(.hidden)");
 
-  if (event.code === "Space" && currentView === "detail" && !modalOpen && !interactiveTarget) {
+  if (modalOpen && event.key === "Tab") {
+    const focusable = Array.from(modalOpen.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'))
+      .filter((element) => !element.disabled && element.offsetParent !== null);
+    if (focusable.length) {
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const activeIndex = focusable.indexOf(document.activeElement);
+      if (event.shiftKey && activeIndex <= 0) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (activeIndex === -1 || activeIndex === focusable.length - 1)) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+  }
+
+  if (event.code === "Space" && currentView === "detail" && !modalOpen) {
+    if (event.repeat) return;
+    if (event.target !== document.body) return;
     event.preventDefault();
     isRunning ? togglePause() : startTimer();
   }
 
   if (event.key === "Escape" && modalOpen && modalOpen.id !== "notes-modal") {
+    if (modalOpen.id === "import-confirm-modal") pendingImport = null;
     closeModal(modalOpen.id);
   }
 
@@ -1289,7 +1741,7 @@ function handleKeyboard(event) {
 
 function persistActiveSession() {
   if (isRunning || isPaused) {
-    localStorage.setItem(
+    return safeSetItem(
       STORAGE.ACTIVE,
       JSON.stringify({
         subjectId: activeTimerSubjectId || currentSubjectId,
@@ -1303,10 +1755,10 @@ function persistActiveSession() {
         pomodoroConfig: { ...pomodoroConfig },
       }),
     );
-    return;
   }
 
   localStorage.removeItem(STORAGE.ACTIVE);
+  return true;
 }
 
 function restoreActiveSession() {

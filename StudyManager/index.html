@@ -3,27 +3,25 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-    <meta name="theme-color" content="#000000" />
-    <meta
-      name="description"
-      content="Organiza tus materias y acumula tus horas de estudio"
-    />
+    <meta name="theme-color" content="#d7d7d0" />
+    <meta name="description" content="Organiza tus materias y acumula tus horas de estudio" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="TempoMind" />
     <title>TempoMind</title>
     <link rel="icon" type="image/png" href="icono.png" media="(prefers-color-scheme: light)" />
     <link rel="icon" type="image/png" href="icono-blanco.png" media="(prefers-color-scheme: dark)" />
     <link rel="apple-touch-icon" href="apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600&family=JetBrains+Mono:wght@200;300;400;500&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=JetBrains+Mono:wght@400&family=Noto+Serif:wght@400&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="styles.css" />
-    <script
-      src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
-      defer
-    ></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
     <script src="app.js" defer></script>
   </head>
   <body>
     <div class="app-container">
+      <!-- Nav Capsule -->
       <header class="top-bar">
         <nav class="nav-tabs" aria-label="Navegación principal">
           <button class="tab-btn active" data-view="subjects" type="button">
@@ -45,9 +43,9 @@
         <section id="view-subjects" class="view active" aria-label="Materias">
           <div class="page-heading">
             <div>
-              <p class="eyebrow">Tu biblioteca de estudio</p>
+              <p class="mono-marker">01 · TU BIBLIOTECA</p>
               <h1>Mis materias</h1>
-              <p class="page-subtitle">Elige una materia para empezar.</p>
+              <p class="page-subtitle">Elige una materia para empezar a registrar.</p>
             </div>
           </div>
           <p id="active-timer-banner" class="active-timer-banner hidden" aria-live="polite"></p>
@@ -62,15 +60,15 @@
 
         <section id="view-detail" class="view detail-view" aria-label="Detalle de materia">
           <button class="btn btn-ghost back-link" type="button" data-go-subjects>
-            ← Materias
+            ← Volver a materias
           </button>
           <div class="subject-detail-heading">
             <div>
-              <p class="eyebrow">Materia activa</p>
+              <p class="mono-marker">02 · MATERIA ACTIVA</p>
               <h1 id="detail-view-name">Materia</h1>
             </div>
             <div class="detail-total">
-              <span>Total estudiado</span>
+              <span class="mono-marker">TOTAL ESTUDIADO</span>
               <strong id="detail-view-total">0m</strong>
             </div>
           </div>
@@ -85,13 +83,14 @@
             </div>
             <div class="timer-ring" id="timer-ring">
               <div class="phase-label hidden" aria-live="polite">Ronda 1 de 4</div>
-              <div id="timer-display" class="timer-display" role="timer" aria-live="polite" aria-atomic="true">
+              <div id="timer-display" class="timer-display" role="timer" aria-live="off" aria-atomic="true">
                 <span class="t-d">00</span>
                 <span class="timer-colon">:</span>
                 <span class="t-d">00</span>
                 <span class="timer-colon">:</span>
                 <span class="t-d">00</span>
               </div>
+              <div id="timer-a11y" class="sr-only" aria-live="polite"></div>
               <div class="round-dots hidden" aria-label="Rondas de pomodoro"></div>
               <div class="timer-progress" aria-hidden="true"><span id="timer-progress-fill"></span></div>
             </div>
@@ -114,14 +113,14 @@
               </div>
             </div>
             <div class="timer-meta-bar" aria-label="Meta diaria">
-              <span>Meta de hoy</span>
+              <span class="mono-marker">META DE HOY</span>
               <strong id="timer-progress-label">0%</strong>
             </div>
             <div class="controls">
               <button id="start-btn" class="btn btn-primary" type="button" data-start-timer>
                 Iniciar sesión
               </button>
-              <button id="pause-btn" class="btn btn-secondary hidden" type="button" data-toggle-pause>
+              <button id="pause-btn" class="btn btn-ghost hidden" type="button" data-toggle-pause>
                 Pausar
               </button>
               <button id="stop-btn" class="btn btn-ghost hidden" type="button" data-stop-timer>
@@ -141,26 +140,26 @@
         <section id="view-stats" class="view" aria-label="Estadísticas">
           <div class="page-heading">
             <div>
-              <p class="eyebrow">Vista global</p>
+              <p class="mono-marker">03 · VISTA GLOBAL</p>
               <h1>Estadísticas</h1>
             </div>
           </div>
           <section class="stats-section" aria-label="Métricas globales">
             <div class="stat-today-block card-module">
-              <span class="stat-label">Hoy</span>
+              <span class="mono-marker">HOY</span>
               <strong id="stat-today" class="stat-value">0m</strong>
             </div>
             <div class="stats-row">
               <div class="stat-card card-module">
-                <span class="stat-label">Esta semana</span>
+                <span class="mono-marker">ESTA SEMANA</span>
                 <strong id="stat-week" class="stat-value">0m</strong>
               </div>
               <div class="stat-card card-module">
-                <span class="stat-label">Racha</span>
+                <span class="mono-marker">RACHA</span>
                 <strong id="stat-streak" class="stat-value">0 días</strong>
               </div>
               <div class="stat-card card-module">
-                <span class="stat-label">Promedio</span>
+                <span class="mono-marker">PROMEDIO</span>
                 <strong id="stat-average" class="stat-value">0m</strong>
               </div>
             </div>
@@ -177,6 +176,10 @@
               <span id="goal-fill" class="goal-fill"></span>
             </div>
           </section>
+          <section class="heatmap-card card-module" aria-label="Constancia de los últimos 90 días">
+            <h2>Constancia</h2>
+            <div id="heatmap-grid" class="heatmap-grid"></div>
+          </section>
           <section class="chart-card card-module" aria-label="Gráfico de últimos siete días">
             <div class="card-header">
               <h2>Últimos 7 días</h2>
@@ -186,7 +189,7 @@
             </div>
           </section>
           <section class="data-actions card-module" aria-label="Datos">
-            <span class="eyebrow">Datos</span>
+            <span class="mono-marker">04 · DATOS</span>
             <button class="btn btn-ghost btn-small" type="button" data-export-data>Exportar</button>
             <button class="btn btn-ghost btn-small" type="button" data-trigger-import>Importar</button>
             <button class="btn btn-ghost btn-small" type="button" data-confirm-reset>Reset</button>
@@ -268,16 +271,30 @@
           <div id="detail-notes" class="notes-text">Sin notas</div>
         </div>
         <button type="button" class="btn btn-secondary" data-close-detail-modal>Cerrar</button>
+        <button type="button" class="btn btn-secondary hidden" data-edit-session>Editar notas</button>
       </div>
     </div>
 
     <div id="confirm-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title">
       <div class="modal-card" tabindex="-1">
         <h3 id="confirm-modal-title">¿Borrar todos los datos?</h3>
-        <p class="summary-text">Se eliminarán todas las materias, sesiones y el progreso actual.</p>
+        <p id="confirm-reset-summary" class="summary-text"></p>
         <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" data-restore-snapshot disabled title="No hay backup disponible">Restaurar último backup</button>
           <button type="button" class="btn btn-secondary" data-close-confirm-modal>Cancelar</button>
           <button type="button" class="btn btn-primary" data-confirm-reset-data>Sí, borrar todo</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="import-confirm-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="import-confirm-title">
+      <div class="modal-card" tabindex="-1">
+        <h3 id="import-confirm-title">¿Reemplazar los datos actuales?</h3>
+        <p id="import-confirm-summary" class="summary-text"></p>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" data-restore-snapshot disabled title="No hay backup disponible">Restaurar último backup</button>
+          <button type="button" class="btn btn-secondary" data-close-import-confirm>Cancelar</button>
+          <button type="button" class="btn btn-primary" data-confirm-import>Reemplazar</button>
         </div>
       </div>
     </div>
@@ -297,6 +314,14 @@
       </div>
     </div>
 
+    <div id="active-session-dock" class="session-dock hidden" role="status" aria-live="polite">
+      <span class="session-dock-subject mono-marker" id="session-dock-subject">Materia</span>
+      <strong class="session-dock-time" id="session-dock-time">00:00:00</strong>
+      <div class="session-dock-actions">
+        <button type="button" class="btn btn-ghost btn-small" data-dock-pause>Pausar</button>
+        <button type="button" class="btn btn-ghost btn-small" data-dock-stop>Detener</button>
+      </div>
+    </div>
     <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
   </body>
 </html>
